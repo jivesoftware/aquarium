@@ -1,6 +1,6 @@
 ![Aquarium](https://github.com/jivesoftware/aquarium/wiki/images/logo-large.png)
 
-Like zookeeper but for leading a schooling of fish.
+Like zookeeper but for leading a school of fish.
 
 What if leader election was something you could add simply to your distributed services. Well that is why we wrote aquarium. Aquarium is a simple automata which can be embedded  into your service. 
 
