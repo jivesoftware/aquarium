@@ -291,7 +291,7 @@ public enum State {
             && checkEquals(currentTimeMillis, desired, current));
     }
 
-    static Waterline highest(CurrentTimeMillis currentTimeMillis, State state, ReadWaterline readWaterline, Waterline me) throws Exception {
+    public static Waterline highest(CurrentTimeMillis currentTimeMillis, State state, ReadWaterline readWaterline, Waterline me) throws Exception {
         @SuppressWarnings("unchecked")
         Waterline[] waterline = new Waterline[1];
         StreamQuorumState stream = (other) -> {
@@ -313,7 +313,7 @@ public enum State {
         return waterline[0];
     }
 
-    static boolean checkEquals(CurrentTimeMillis currentTimeMillis, Waterline a, Waterline b) {
+    public static boolean checkEquals(CurrentTimeMillis currentTimeMillis, Waterline a, Waterline b) {
         if (a == b) {
             return true;
         }
@@ -337,7 +337,7 @@ public enum State {
         return !(a.getState() != null ? !a.getState().equals(b.getState()) : b.getState() != null);
     }
 
-    static int compare(CurrentTimeMillis currentTimeMillis, Waterline a, Waterline b) {
+    public static int compare(CurrentTimeMillis currentTimeMillis, Waterline a, Waterline b) {
         int c = -Long.compare(a.getTimestamp(), b.getTimestamp());
         if (c != 0) {
             return c;
