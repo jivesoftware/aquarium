@@ -142,7 +142,7 @@ public class Aquarium {
     }
 
     public boolean isLivelyState(Member asAquariumMember, State state) throws Exception {
-        Waterline waterline = getState(member);
+        Waterline waterline = getState(asAquariumMember);
         return waterline.getState() == state && waterline.isAtQuorum() && waterline.isAlive(currentTimeMillis.get());
     }
 
