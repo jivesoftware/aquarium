@@ -40,10 +40,7 @@ public class Member implements Comparable<Member> {
             return false;
         }
         final Member other = (Member) obj;
-        if (!Arrays.equals(this.member, other.member)) {
-            return false;
-        }
-        return true;
+        return Arrays.equals(this.member, other.member);
     }
 
     @Override
