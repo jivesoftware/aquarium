@@ -146,4 +146,12 @@ public class Aquarium {
         return waterline.getState() == state && waterline.isAtQuorum() && waterline.isAlive(currentTimeMillis.get());
     }
 
+    public boolean isLivelyEndState(Member asAquariumMember) throws Exception {
+        boolean[] result = { false };
+        waterlineTx.tx(asAquariumMember, (readCurrent, readDesired) -> {
+            result[0] = captureEndState(readCurrent, readDesired) != null;
+            return true;
+        });
+        return result[0];
+    }
 }

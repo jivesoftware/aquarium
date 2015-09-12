@@ -277,7 +277,7 @@ public enum State {
         }
 
         if (!leaderIsLively && current.isAlive(currentTimeMillis.get()) && desired.getState() != leader && desired.getState() != expunged) {
-            long desiredTimestamp = (desiredLeader != null) ? desiredLeader.getTimestamp() + 1 : desired.getTimestamp();
+            long desiredTimestamp = Math.max(desired.getTimestamp(), (desiredLeader != null) ? desiredLeader.getTimestamp() : 0) + 1;
             transitionDesired.transition(desired, desiredTimestamp, leader);
             return true;
         }
