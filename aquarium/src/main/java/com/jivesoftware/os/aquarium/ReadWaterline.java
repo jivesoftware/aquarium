@@ -36,7 +36,7 @@ public class ReadWaterline<T> {
         Set<Member> acked = Sets.newHashSet();
         T lifecycle = memberLifecycle.get(asMember);
         if (lifecycle == null) {
-            LOG.info("Null lifecycle for {}", asMember);
+            //LOG.info("Null lifecycle for {}", asMember);
             return null;
         }
         stateStorage.scan(asMember, null, lifecycle, (rootRingMember, isSelf, ackRingMember, rootLifecycle, state, timestamp, version) -> {
