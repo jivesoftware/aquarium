@@ -52,17 +52,7 @@ public class AquariumNGTest {
 
             Member member = new Member(intBytes(i));
 
-            MemberLifecycle<Integer> memberLifecycle = new MemberLifecycle<Integer>() {
-                @Override
-                public Integer get() throws Exception {
-                    return rawLifecycles.computeIfAbsent(member, key -> 0);
-                }
-
-                @Override
-                public Integer getOther(Member other) throws Exception {
-                    return rawLifecycles.computeIfAbsent(other, key -> 0);
-                }
-            };
+            MemberLifecycle<Integer> memberLifecycle = member1 -> rawLifecycles.computeIfAbsent(member1, key -> 0);
 
             LivelinessStorage livelinessStorage = new LivelinessStorage() {
                 @Override
@@ -399,8 +389,8 @@ public class AquariumNGTest {
         }
 
         public void forceDesiredState(State state) throws Exception {
-            readWaterlineTx.tx(member, (current, desired) -> {
-                Waterline currentWaterline = current.get();
+            readWaterlineTx.tx((current, desired) -> {
+                Waterline currentWaterline = current.get(member);
                 if (currentWaterline == null) {
                     currentWaterline = new Waterline(member, State.bootstrap, orderIdProvider.nextId(), -1L, true, Long.MAX_VALUE);
                 }
@@ -411,12 +401,12 @@ public class AquariumNGTest {
         }
 
         public void forceCurrentState(State state) throws Exception {
-            readWaterlineTx.tx(member, (current, desired) -> {
-                Waterline currentWaterline = current.get();
+            readWaterlineTx.tx((current, desired) -> {
+                Waterline currentWaterline = current.get(member);
                 if (currentWaterline == null) {
                     currentWaterline = new Waterline(member, State.bootstrap, orderIdProvider.nextId(), -1L, true, Long.MAX_VALUE);
                 }
-                Waterline desiredWaterline = desired.get();
+                Waterline desiredWaterline = desired.get(member);
                 if (desiredWaterline != null) {
                     System.out.println("FORCING CURRENT " + state + ":" + member);
                     currentTransitionQuorum.transition(currentWaterline, desiredWaterline.getTimestamp(), state);
@@ -427,10 +417,10 @@ public class AquariumNGTest {
 
         public void awaitCurrentState(State... states) throws Exception {
             Set<State> acceptable = Sets.newHashSet(states);
-            boolean[] reachedCurrent = {false};
+            boolean[] reachedCurrent = { false };
             while (!reachedCurrent[0]) {
-                readWaterlineTx.tx(member, (current, desired) -> {
-                    Waterline currentWaterline = current.get();
+                readWaterlineTx.tx((current, desired) -> {
+                    Waterline currentWaterline = current.get(member);
                     if (currentWaterline != null) {
                         reachedCurrent[0] = acceptable.contains(currentWaterline.getState()) && currentWaterline.isAtQuorum();
                     }
@@ -442,13 +432,13 @@ public class AquariumNGTest {
         }
 
         public void awaitDesiredState(State state, AquariumNode[] nodes) throws Exception {
-            boolean[] reachedDesired = {false};
+            boolean[] reachedDesired = { false };
             while (!reachedDesired[0]) {
-                Waterline[] currentWaterline = {null};
-                readWaterlineTx.tx(member, (current, desired) -> {
-                    currentWaterline[0] = current.get();
+                Waterline[] currentWaterline = { null };
+                readWaterlineTx.tx((current, desired) -> {
+                    currentWaterline[0] = current.get(member);
                     if (currentWaterline[0] != null) {
-                        Waterline desiredWaterline = desired.get();
+                        Waterline desiredWaterline = desired.get(member);
 
                         reachedDesired[0] = currentWaterline[0].getState() == state
                             && currentWaterline[0].isAtQuorum()
@@ -482,9 +472,9 @@ public class AquariumNGTest {
         }
 
         private void printState(String mode) throws Exception {
-            readWaterlineTx.tx(member, (current, desired) -> {
-                Waterline currentWaterline = current.get();
-                Waterline desiredWaterline = desired.get();
+            readWaterlineTx.tx((current, desired) -> {
+                Waterline currentWaterline = current.get(member);
+                Waterline desiredWaterline = desired.get(member);
                 System.out.println(bytesInt(member.getMember()) + " " + mode);
                 System.out.println("\tCurrent:" + currentWaterline);
                 System.out.println("\tDesired:" + desiredWaterline);
@@ -498,9 +488,10 @@ public class AquariumNGTest {
 
         private final ContextualStateStorage currentStateStorage;
         private final ContextualStateStorage desiredStateStorage;
-        private final Liveliness liveliness;
         private final MemberLifecycle<Integer> memberLifecycle;
-        private final AtQuorum atQuorum;
+
+        private final ReadWaterline<Integer> readCurrent;
+        private final ReadWaterline<Integer> readDesired;
 
         public Storage(ContextualStateStorage currentStateStorage,
             ContextualStateStorage desiredStateStorage,
@@ -509,23 +500,23 @@ public class AquariumNGTest {
             AtQuorum atQuorum) {
             this.currentStateStorage = currentStateStorage;
             this.desiredStateStorage = desiredStateStorage;
-            this.liveliness = liveliness;
             this.memberLifecycle = memberLifecycle;
-            this.atQuorum = atQuorum;
+
+            this.readCurrent = new ReadWaterline<>(currentStateStorage, liveliness, memberLifecycle, atQuorum, Integer.class);
+            this.readDesired = new ReadWaterline<>(desiredStateStorage, liveliness, memberLifecycle, atQuorum, Integer.class);
         }
 
         void setCurrentState(Member member, long timestamp, State state) throws Exception {
-            currentStateStorage.update(setLiveliness -> setLiveliness.set(member, member, memberLifecycle.get(), state, timestamp));
+            currentStateStorage.update(setLiveliness -> setLiveliness.set(member, member, memberLifecycle.get(member), state, timestamp));
         }
 
         void setDesiredState(Member member, long timestamp, State state) throws Exception {
-            desiredStateStorage.update(setLiveliness -> setLiveliness.set(member, member, memberLifecycle.get(), state, timestamp));
+            desiredStateStorage.update(setLiveliness -> setLiveliness.set(member, member, memberLifecycle.get(member), state, timestamp));
         }
 
         @Override
-        public void tx(Member member, Tx tx) throws Exception {
-            tx.tx(new ReadWaterline<>(currentStateStorage, liveliness, memberLifecycle, atQuorum, member, Integer.class),
-                new ReadWaterline<>(desiredStateStorage, liveliness, memberLifecycle, atQuorum, member, Integer.class));
+        public boolean tx(Tx tx) throws Exception {
+            return tx.tx(readCurrent, readDesired);
         }
 
         public void clear(Member rootMember) {

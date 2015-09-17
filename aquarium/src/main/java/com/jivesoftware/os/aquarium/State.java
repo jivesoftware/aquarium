@@ -82,11 +82,11 @@ public enum State {
                 return false;
             }
 
-            Waterline desiredLeader = highest(currentTimeMillis, leader, readDesired, desired);
+            Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
             if (desiredLeader != null && desiredLeader.isAtQuorum()) {
                 boolean[] hasLeader = {false};
                 boolean[] hasNominated = {false};
-                readCurrent.getOthers((other) -> {
+                readCurrent.getOthers(current.getMember(), (other) -> {
                     if (atDesiredState(currentTimeMillis, leader, other, desiredLeader)) {
                         hasLeader[0] = true;
                     }
@@ -127,7 +127,7 @@ public enum State {
                 return false;
             }
 
-            Waterline desiredLeader = highest(currentTimeMillis, leader, readDesired, desired);
+            Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
             if (desiredLeader == null || !desired.getMember().equals(desiredLeader.getMember())) {
                 return transitionCurrent.transition(current, desired.getTimestamp(), inactive);
             } else {
@@ -152,8 +152,8 @@ public enum State {
                 return false;
             }
 
-            Waterline currentLeader = highest(currentTimeMillis, leader, readCurrent, current);
-            Waterline desiredLeader = highest(currentTimeMillis, leader, readDesired, desired);
+            Waterline currentLeader = highest(current.getMember(), currentTimeMillis, leader, readCurrent, current);
+            Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
             if (currentLeader == null
                 || desiredLeader == null
                 || !currentLeader.isAtQuorum()
@@ -184,8 +184,8 @@ public enum State {
                 return false;
             }
 
-            Waterline currentLeader = highest(currentTimeMillis, leader, readCurrent, current);
-            Waterline desiredLeader = highest(currentTimeMillis, leader, readDesired, desired);
+            Waterline currentLeader = highest(current.getMember(), currentTimeMillis, leader, readCurrent, current);
+            Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
             boolean isFollower = false;
             if (currentLeader == null
                 || desiredLeader == null
@@ -215,10 +215,10 @@ public enum State {
                 return false;
             }
 
-            Waterline desiredLeader = highest(currentTimeMillis, leader, readDesired, desired);
+            Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
             if (desiredLeader != null) {
 
-                Waterline currentLeader = highest(currentTimeMillis, leader, readCurrent, current);
+                Waterline currentLeader = highest(current.getMember(), currentTimeMillis, leader, readCurrent, current);
                 if (desiredLeader.isAtQuorum()
                     && checkEquals(currentTimeMillis, desiredLeader, currentLeader)) {
                     return transitionCurrent.transition(current, desired.getTimestamp(), inactive);
@@ -261,7 +261,7 @@ public enum State {
             return true;
         }
 
-        Waterline desiredLeader = highest(currentTimeMillis, leader, readDesired, desired);
+        Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
         boolean leaderIsLively = desiredLeader != null && desiredLeader.isAlive(currentTimeMillis.get());
         if (desired == null) {
             // recover from lack of desired
@@ -291,7 +291,11 @@ public enum State {
             && checkEquals(currentTimeMillis, desired, current));
     }
 
-    public static Waterline highest(CurrentTimeMillis currentTimeMillis, State state, ReadWaterline readWaterline, Waterline me) throws Exception {
+    public static Waterline highest(Member member,
+        CurrentTimeMillis currentTimeMillis,
+        State state,
+        ReadWaterline readWaterline,
+        Waterline me) throws Exception {
         @SuppressWarnings("unchecked")
         Waterline[] waterline = new Waterline[1];
         StreamQuorumState stream = (other) -> {
@@ -309,7 +313,7 @@ public enum State {
         if (me != null) {
             stream.stream(me);
         }
-        readWaterline.getOthers(stream);
+        readWaterline.getOthers(member, stream);
         return waterline[0];
     }
 

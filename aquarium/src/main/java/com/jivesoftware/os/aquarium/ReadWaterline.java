@@ -17,32 +17,29 @@ public class ReadWaterline<T> {
     private final Liveliness liveliness;
     private final MemberLifecycle<T> memberLifecycle;
     private final AtQuorum atQuorum;
-    private final Member member;
     private final Class<T> lifecycleType;
 
     public ReadWaterline(StateStorage<T> stateStorage,
         Liveliness liveliness,
         MemberLifecycle<T> memberLifecycle,
         AtQuorum atQuorum,
-        Member member,
         Class<T> lifecycleType) {
         this.stateStorage = stateStorage;
         this.liveliness = liveliness;
         this.memberLifecycle = memberLifecycle;
         this.atQuorum = atQuorum;
-        this.member = member;
         this.lifecycleType = lifecycleType;
     }
 
-    public Waterline get() throws Exception {
+    public Waterline get(Member asMember) throws Exception {
         TimestampedState[] current = new TimestampedState[1];
         Set<Member> acked = Sets.newHashSet();
-        T lifecycle = memberLifecycle.get();
+        T lifecycle = memberLifecycle.get(asMember);
         if (lifecycle == null) {
-            LOG.info("Null lifecycle for {}", member);
+            LOG.info("Null lifecycle for {}", asMember);
             return null;
         }
-        stateStorage.scan(member, null, lifecycle, (rootRingMember, isSelf, ackRingMember, rootLifecycle, state, timestamp, version) -> {
+        stateStorage.scan(asMember, null, lifecycle, (rootRingMember, isSelf, ackRingMember, rootLifecycle, state, timestamp, version) -> {
             if (current[0] == null && isSelf) {
                 current[0] = new TimestampedState(state, timestamp, version);
             }
@@ -55,18 +52,18 @@ public class ReadWaterline<T> {
             return true;
         });
         if (current[0] != null) {
-            return new Waterline(member,
+            return new Waterline(asMember,
                 current[0].state,
                 current[0].timestamp,
                 current[0].version,
                 atQuorum.is(acked.size()),
-                liveliness.aliveUntilTimestamp());
+                liveliness.aliveUntilTimestamp(asMember));
         } else {
             return null;
         }
     }
 
-    public void getOthers(StreamQuorumState stream) throws Exception {
+    public void getOthers(Member asMember, StreamQuorumState stream) throws Exception {
         Member[] otherMember = new Member[1];
         TimestampedState[] otherState = new TimestampedState[1];
         @SuppressWarnings("unchecked")
@@ -80,15 +77,15 @@ public class ReadWaterline<T> {
                     otherState[0].timestamp,
                     otherState[0].version,
                     otherHasQuorum,
-                    liveliness.otherAliveUntilTimestamp(otherMember[0])));
+                    liveliness.aliveUntilTimestamp(otherMember[0])));
 
                 otherMember[0] = null;
                 otherState[0] = null;
                 acked.clear();
             }
 
-            if (otherMember[0] == null && isSelf && !member.equals(rootMember)) {
-                T lifecycle = memberLifecycle.getOther(rootMember);
+            if (otherMember[0] == null && isSelf && !asMember.equals(rootMember)) {
+                T lifecycle = memberLifecycle.get(rootMember);
                 if (lifecycle != null) {
                     otherMember[0] = rootMember;
                     otherState[0] = new TimestampedState(state, timestamp, version);
@@ -111,11 +108,11 @@ public class ReadWaterline<T> {
                 otherState[0].timestamp,
                 otherState[0].version,
                 otherHasQuorum,
-                liveliness.otherAliveUntilTimestamp(otherMember[0])));
+                liveliness.aliveUntilTimestamp(otherMember[0])));
         }
     }
 
-    public void acknowledgeOther() throws Exception {
+    public void acknowledgeOther(Member member) throws Exception {
         stateStorage.update(setState -> {
             @SuppressWarnings("unchecked")
             StateEntry<T>[] otherE = (StateEntry<T>[]) new StateEntry[1];

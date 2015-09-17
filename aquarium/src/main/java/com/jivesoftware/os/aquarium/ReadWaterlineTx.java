@@ -6,7 +6,7 @@ package com.jivesoftware.os.aquarium;
  */
 public interface ReadWaterlineTx {
 
-    void tx(Member member, Tx tx) throws Exception;
+    boolean tx(Tx tx) throws Exception;
 
     interface Tx {
 

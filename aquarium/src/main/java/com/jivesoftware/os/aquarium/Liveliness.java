@@ -75,7 +75,15 @@ public class Liveliness {
         });
     }
 
-    public long aliveUntilTimestamp() throws Exception {
+    public long aliveUntilTimestamp(Member asMember) throws Exception {
+        if (member.equals(asMember)) {
+            return myAliveUntilTimestamp();
+        } else {
+            return otherAliveUntilTimestamp(asMember);
+        }
+    }
+
+    private long myAliveUntilTimestamp() throws Exception {
         if (deadAfterMillis <= 0) {
             return Long.MAX_VALUE;
         }
@@ -102,7 +110,7 @@ public class Liveliness {
         return -1;
     }
 
-    public long otherAliveUntilTimestamp(Member other) throws Exception {
+    private long otherAliveUntilTimestamp(Member other) throws Exception {
         if (deadAfterMillis <= 0) {
             return Long.MAX_VALUE;
         }
