@@ -442,7 +442,7 @@ public class AquariumNGTest {
 
                         reachedDesired[0] = currentWaterline[0].getState() == state
                             && currentWaterline[0].isAtQuorum()
-                            && State.checkEquals(currentTimeMillis, currentWaterline[0], desiredWaterline);
+                            && State.checkEquals(currentTimeMillis.get(), currentWaterline[0], desiredWaterline);
                     }
                     return true;
                 });

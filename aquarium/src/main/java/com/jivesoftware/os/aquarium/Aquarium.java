@@ -91,7 +91,7 @@ public class Aquarium {
         if (currentWaterline != null
             && currentWaterline.isAlive(currentTimeMillis.get())
             && currentWaterline.isAtQuorum()
-            && State.checkEquals(currentTimeMillis, currentWaterline, desiredWaterline)) {
+            && State.checkEquals(currentTimeMillis.get(), currentWaterline, desiredWaterline)) {
 
             if (desiredWaterline.getState() == State.leader || desiredWaterline.getState() == State.follower) {
                 return desiredWaterline;

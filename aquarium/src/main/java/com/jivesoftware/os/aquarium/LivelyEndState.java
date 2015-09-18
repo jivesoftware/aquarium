@@ -21,23 +21,14 @@ public class LivelyEndState {
     }
 
     public boolean isOnline() {
-        return currentWaterline != null && (currentWaterline.getState() == State.follower || currentWaterline.getState() == State.leader);
-    }
-
-    public boolean isLively() {
         if (currentTimeMillis == null) {
             return currentWaterline.isAtQuorum();
         }
-        if (currentWaterline != null
-            && currentWaterline.isAlive(currentTimeMillis.get())
+        return currentWaterline != null
             && currentWaterline.isAtQuorum()
-            && State.checkEquals(currentTimeMillis, currentWaterline, desiredWaterline)) {
-
-            if (desiredWaterline.getState() == State.leader || desiredWaterline.getState() == State.follower) {
-                return true;
-            }
-        }
-        return false;
+            && (currentWaterline.getState() == State.follower || currentWaterline.getState() == State.leader)
+            && currentWaterline.isAlive(currentTimeMillis.get())
+            && State.checkEquals(currentTimeMillis.get(), currentWaterline, desiredWaterline);
     }
 
     @Override

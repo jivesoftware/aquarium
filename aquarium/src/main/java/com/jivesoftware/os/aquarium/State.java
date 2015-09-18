@@ -87,7 +87,7 @@ public enum State {
                 boolean[] hasLeader = {false};
                 boolean[] hasNominated = {false};
                 readCurrent.getOthers(current.getMember(), (other) -> {
-                    if (atDesiredState(currentTimeMillis, leader, other, desiredLeader)) {
+                    if (atDesiredState(currentTimeMillis.get(), leader, other, desiredLeader)) {
                         hasLeader[0] = true;
                     }
 
@@ -157,8 +157,8 @@ public enum State {
             if (currentLeader == null
                 || desiredLeader == null
                 || !currentLeader.isAtQuorum()
-                || !checkEquals(currentTimeMillis, currentLeader, desiredLeader)
-                || !checkEquals(currentTimeMillis, current, desired)) {
+                || !checkEquals(currentTimeMillis.get(), currentLeader, desiredLeader)
+                || !checkEquals(currentTimeMillis.get(), current, desired)) {
                 return transitionCurrent.transition(current, desired.getTimestamp(), inactive);
             }
             return false;
@@ -198,7 +198,7 @@ public enum State {
                 || currentLeader == null
                 || desiredLeader == null
                 || !desiredLeader.isAtQuorum()
-                || !checkEquals(currentTimeMillis, currentLeader, desiredLeader)) {
+                || !checkEquals(currentTimeMillis.get(), currentLeader, desiredLeader)) {
                 return transitionCurrent.transition(current, desired.getTimestamp(), demoted);
             }
             return false;
@@ -220,7 +220,7 @@ public enum State {
 
                 Waterline currentLeader = highest(current.getMember(), currentTimeMillis, leader, readCurrent, current);
                 if (desiredLeader.isAtQuorum()
-                    && checkEquals(currentTimeMillis, desiredLeader, currentLeader)) {
+                    && checkEquals(currentTimeMillis.get(), desiredLeader, currentLeader)) {
                     return transitionCurrent.transition(current, desired.getTimestamp(), inactive);
                 }
                 if (desiredLeader.isAtQuorum()
@@ -285,10 +285,10 @@ public enum State {
         return !current.isAtQuorum() || !desired.isAtQuorum();
     }
 
-    static boolean atDesiredState(CurrentTimeMillis currentTimeMillis, State state, Waterline current, Waterline desired) {
+    static boolean atDesiredState(long timestamp, State state, Waterline current, Waterline desired) {
         return (desired.getState() == state
             && desired.isAtQuorum()
-            && checkEquals(currentTimeMillis, desired, current));
+            && checkEquals(timestamp, desired, current));
     }
 
     public static Waterline highest(Member member,
@@ -317,7 +317,7 @@ public enum State {
         return waterline[0];
     }
 
-    public static boolean checkEquals(CurrentTimeMillis currentTimeMillis, Waterline a, Waterline b) {
+    public static boolean checkEquals(long timestamp, Waterline a, Waterline b) {
         if (a == b) {
             return true;
         }
@@ -331,7 +331,6 @@ public enum State {
         if (a.isAtQuorum() != b.isAtQuorum()) {
             return false;
         }
-        long timestamp = currentTimeMillis.get();
         if (a.isAlive(timestamp) != b.isAlive(timestamp)) {
             return false;
         }
