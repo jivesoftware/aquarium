@@ -109,13 +109,11 @@ public class Aquarium {
         return leader[0];
     }
 
-    public LivelyEndState awaitLivelyEndState(long timeoutMillis) throws Exception {
-        return awaitLivelyEndState.awaitChange(this::livelyEndState, timeoutMillis);
-    }
-
-    public Waterline awaitLeader(long timeoutMillis) throws Exception {
-        awaitLivelyEndState.awaitChange(this::livelyEndState, timeoutMillis);
-        return getLeader();
+    public LivelyEndState awaitOnline(long timeoutMillis) throws Exception {
+        return awaitLivelyEndState.awaitChange(() -> {
+            LivelyEndState livelyEndState = livelyEndState();
+            return livelyEndState.isOnline() ? livelyEndState : null;
+        }, timeoutMillis);
     }
 
     public boolean suggestState(State state) throws Exception {

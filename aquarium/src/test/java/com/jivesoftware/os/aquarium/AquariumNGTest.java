@@ -306,12 +306,12 @@ public class AquariumNGTest {
                     continue;
                 }
 
-                LivelyEndState waterline = node.aquarium.livelyEndState();
-                if (waterline != null && waterline.currentWaterline != null) {
-                    if (waterline.currentWaterline.getState() == State.follower) {
+                LivelyEndState livelyEndState = node.aquarium.livelyEndState();
+                if (livelyEndState != null) {
+                    if (livelyEndState.getCurrentState() == State.follower) {
                         follower++;
                     }
-                    if (waterline.currentWaterline.getState() == State.leader) {
+                    if (livelyEndState.getCurrentState() == State.leader) {
                         leader = node;
                         leaders++;
                     }

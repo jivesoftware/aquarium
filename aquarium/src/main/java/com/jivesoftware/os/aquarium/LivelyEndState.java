@@ -9,15 +9,27 @@ public class LivelyEndState {
     public static final LivelyEndState ALWAYS_ONLINE = new LivelyEndState(null, Waterline.ALWAYS_ONLINE, Waterline.ALWAYS_ONLINE, null);
 
     private final CurrentTimeMillis currentTimeMillis;
-    public final Waterline currentWaterline;
-    public final Waterline desiredWaterline;
-    public final Waterline leaderWaterline;
+    private final Waterline currentWaterline;
+    private final Waterline desiredWaterline;
+    private final Waterline leaderWaterline;
 
     public LivelyEndState(CurrentTimeMillis currentTimeMillis, Waterline currentWaterline, Waterline desiredWaterline, Waterline leaderWaterline) {
         this.currentTimeMillis = currentTimeMillis;
         this.currentWaterline = currentWaterline;
         this.desiredWaterline = desiredWaterline;
         this.leaderWaterline = leaderWaterline;
+    }
+
+    public State getCurrentState() {
+        return currentWaterline != null ? currentWaterline.getState() : null;
+    }
+
+    public Waterline getCurrentWaterline() {
+        return currentWaterline;
+    }
+
+    public Waterline getLeaderWaterline() {
+        return leaderWaterline;
     }
 
     public boolean isOnline() {
