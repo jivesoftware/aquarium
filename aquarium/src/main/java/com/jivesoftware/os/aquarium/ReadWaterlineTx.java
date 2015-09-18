@@ -6,11 +6,11 @@ package com.jivesoftware.os.aquarium;
  */
 public interface ReadWaterlineTx {
 
-    boolean tx(Tx tx) throws Exception;
+    <R> R tx(Tx<R> tx) throws Exception;
 
-    interface Tx {
+    interface Tx<R> {
 
-        boolean tx(ReadWaterline readCurrent, ReadWaterline readDesired) throws Exception;
+        R tx(ReadWaterline readCurrent, ReadWaterline readDesired) throws Exception;
     }
 
 }

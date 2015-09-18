@@ -5,6 +5,8 @@ package com.jivesoftware.os.aquarium;
  */
 public class Waterline {
 
+    public static final Waterline ALWAYS_ONLINE = new Waterline(null,  State.follower, 0, 0, true, Long.MAX_VALUE);
+
     private final Member member;
     private final State state;
     private final long timestamp;
