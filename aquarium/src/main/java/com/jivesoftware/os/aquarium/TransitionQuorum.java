@@ -6,5 +6,11 @@ package com.jivesoftware.os.aquarium;
  */
 public interface TransitionQuorum {
 
-    boolean transition(Waterline current, long desiredTimestamp, State state) throws Exception;
+    boolean transition(Waterline existing,
+        long nextTimestamp,
+        State nextState,
+        ReadWaterline readCurrent,
+        ReadWaterline readDesired,
+        WriteWaterline writeCurrent,
+        WriteWaterline writeDesired) throws Exception;
 }

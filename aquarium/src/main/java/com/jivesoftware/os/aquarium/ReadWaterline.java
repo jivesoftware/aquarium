@@ -14,18 +14,15 @@ public class ReadWaterline<T> {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final StateStorage<T> stateStorage;
-    private final Liveliness liveliness;
     private final MemberLifecycle<T> memberLifecycle;
     private final AtQuorum atQuorum;
     private final Class<T> lifecycleType;
 
     public ReadWaterline(StateStorage<T> stateStorage,
-        Liveliness liveliness,
         MemberLifecycle<T> memberLifecycle,
         AtQuorum atQuorum,
         Class<T> lifecycleType) {
         this.stateStorage = stateStorage;
-        this.liveliness = liveliness;
         this.memberLifecycle = memberLifecycle;
         this.atQuorum = atQuorum;
         this.lifecycleType = lifecycleType;
@@ -56,8 +53,7 @@ public class ReadWaterline<T> {
                 current[0].state,
                 current[0].timestamp,
                 current[0].version,
-                atQuorum.is(acked.size()),
-                liveliness.aliveUntilTimestamp(asMember));
+                atQuorum.is(acked.size()));
         } else {
             return null;
         }
@@ -76,8 +72,7 @@ public class ReadWaterline<T> {
                     otherState[0].state,
                     otherState[0].timestamp,
                     otherState[0].version,
-                    otherHasQuorum,
-                    liveliness.aliveUntilTimestamp(otherMember[0])));
+                    otherHasQuorum));
 
                 otherMember[0] = null;
                 otherState[0] = null;
@@ -107,8 +102,7 @@ public class ReadWaterline<T> {
                 otherState[0].state,
                 otherState[0].timestamp,
                 otherState[0].version,
-                otherHasQuorum,
-                liveliness.aliveUntilTimestamp(otherMember[0])));
+                otherHasQuorum));
         }
     }
 

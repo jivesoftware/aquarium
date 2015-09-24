@@ -36,62 +36,68 @@ public enum State {
 
     interface Transistor {
 
-        boolean advance(CurrentTimeMillis currentTimeMillis,
+        boolean advance(Liveliness liveliness,
             Waterline current,
             ReadWaterline readCurrent,
+            WriteWaterline writeCurrent,
             TransitionQuorum transitionCurrent,
             Waterline desired,
             ReadWaterline readDesired,
+            WriteWaterline writeDesired,
             TransitionQuorum transitionDesired) throws Exception;
     }
 
     static class Bootstrap implements Transistor {
 
         @Override
-        public boolean advance(CurrentTimeMillis currentTimeMillis,
+        public boolean advance(Liveliness liveliness,
             Waterline current,
             ReadWaterline readCurrent,
+            WriteWaterline writeCurrent,
             TransitionQuorum transitionCurrent,
             Waterline desired,
             ReadWaterline readDesired,
+            WriteWaterline writeDesired,
             TransitionQuorum transitionDesired) throws Exception {
 
-            if (recoverOrAwaitingQuorum(currentTimeMillis, current, desired, readDesired, transitionDesired)) {
+            if (recoverOrAwaitingQuorum(liveliness, current, desired, readCurrent, readDesired, writeCurrent, writeDesired, transitionDesired)) {
                 return false;
             }
-            return transitionCurrent.transition(current, desired.getTimestamp(), inactive);
+            return transitionCurrent.transition(current, desired.getTimestamp(), inactive, readCurrent, readDesired, writeCurrent, writeDesired);
         }
     }
 
     static class Inactive implements Transistor {
 
         @Override
-        public boolean advance(CurrentTimeMillis currentTimeMillis,
+        public boolean advance(Liveliness liveliness,
             Waterline current,
             ReadWaterline readCurrent,
+            WriteWaterline writeCurrent,
             TransitionQuorum transitionCurrent,
             Waterline desired,
             ReadWaterline readDesired,
+            WriteWaterline writeDesired,
             TransitionQuorum transitionDesired) throws Exception {
-            if (recoverOrAwaitingQuorum(currentTimeMillis, current, desired, readDesired, transitionDesired)) {
+            if (recoverOrAwaitingQuorum(liveliness, current, desired, readCurrent, readDesired, writeCurrent, writeDesired, transitionDesired)) {
                 return false;
             }
 
             if (desired.getState() == expunged) {
-                transitionCurrent.transition(current, desired.getTimestamp(), expunged);
+                transitionCurrent.transition(current, desired.getTimestamp(), expunged, readCurrent, readDesired, writeCurrent, writeDesired);
                 return false;
             }
 
-            Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
+            Waterline desiredLeader = highest(current.getMember(), leader, readDesired, desired);
             if (desiredLeader != null && desiredLeader.isAtQuorum()) {
-                boolean[] hasLeader = {false};
-                boolean[] hasNominated = {false};
+                boolean[] hasLeader = { false };
+                boolean[] hasNominated = { false };
                 readCurrent.getOthers(current.getMember(), (other) -> {
-                    if (atDesiredState(currentTimeMillis.get(), leader, other, desiredLeader)) {
+                    boolean otherIsAlive = liveliness.isAlive(other.getMember());
+                    if (otherIsAlive && atDesiredState(leader, other, desiredLeader)) {
                         hasLeader[0] = true;
                     }
-
-                    if (other.getState() == nominated && other.isAtQuorum() && desiredLeader.getMember().equals(other.getMember())) {
+                    if (otherIsAlive && other.getState() == nominated && other.isAtQuorum() && desiredLeader.getMember().equals(other.getMember())) {
                         hasNominated[0] = true;
                     }
                     return !hasLeader[0] && !hasNominated[0];
@@ -100,17 +106,17 @@ public enum State {
                 if (!desiredLeader.getMember().equals(current.getMember())) {
                     if (desired.getState() == follower) {
                         if (desired.isAtQuorum() && hasLeader[0]) {
-                            transitionCurrent.transition(current, desired.getTimestamp(), follower);
+                            transitionCurrent.transition(current, desired.getTimestamp(), follower, readCurrent, readDesired, writeCurrent, writeDesired);
                         }
                     } else {
-                        transitionDesired.transition(desired, desired.getTimestamp(), follower);
+                        transitionDesired.transition(desired, desired.getTimestamp(), follower, readCurrent, readDesired, writeCurrent, writeDesired);
                     }
                     return false;
                 } else if (hasNominated[0]) {
                     return false;
                 } else {
                     if (desired.getState() == leader) {
-                        return transitionCurrent.transition(current, desired.getTimestamp(), nominated);
+                        return transitionCurrent.transition(current, desired.getTimestamp(), nominated, readCurrent, readDesired, writeCurrent, writeDesired);
                     }
                 }
             }
@@ -121,23 +127,30 @@ public enum State {
     static class Nominated implements Transistor {
 
         @Override
-        public boolean advance(CurrentTimeMillis currentTimeMillis, Waterline current, ReadWaterline readCurrent, TransitionQuorum transitionCurrent,
-            Waterline desired, ReadWaterline readDesired, TransitionQuorum transitionDesired) throws Exception {
-            if (recoverOrAwaitingQuorum(currentTimeMillis, current, desired, readDesired, transitionDesired)) {
+        public boolean advance(Liveliness liveliness,
+            Waterline current,
+            ReadWaterline readCurrent,
+            WriteWaterline writeCurrent,
+            TransitionQuorum transitionCurrent,
+            Waterline desired,
+            ReadWaterline readDesired,
+            WriteWaterline writeDesired,
+            TransitionQuorum transitionDesired) throws Exception {
+            if (recoverOrAwaitingQuorum(liveliness, current, desired, readCurrent, readDesired, writeCurrent, writeDesired, transitionDesired)) {
                 return false;
             }
 
-            Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
+            Waterline desiredLeader = highest(current.getMember(), leader, readDesired, desired);
             if (desiredLeader == null || !desired.getMember().equals(desiredLeader.getMember())) {
-                return transitionCurrent.transition(current, desired.getTimestamp(), inactive);
+                return transitionCurrent.transition(current, desired.getTimestamp(), inactive, readCurrent, readDesired, writeCurrent, writeDesired);
             } else {
                 if (desired.getTimestamp() < desiredLeader.getTimestamp()) {
                     return false;
                 }
                 if (desired.getState() != leader) {
-                    return transitionCurrent.transition(current, desired.getTimestamp(), inactive);
+                    return transitionCurrent.transition(current, desired.getTimestamp(), inactive, readCurrent, readDesired, writeCurrent, writeDesired);
                 }
-                return transitionCurrent.transition(current, desiredLeader.getTimestamp(), leader);
+                return transitionCurrent.transition(current, desiredLeader.getTimestamp(), leader, readCurrent, readDesired, writeCurrent, writeDesired);
             }
         }
 
@@ -146,20 +159,27 @@ public enum State {
     static class Follower implements Transistor {
 
         @Override
-        public boolean advance(CurrentTimeMillis currentTimeMillis, Waterline current, ReadWaterline readCurrent, TransitionQuorum transitionCurrent,
-            Waterline desired, ReadWaterline readDesired, TransitionQuorum transitionDesired) throws Exception {
-            if (recoverOrAwaitingQuorum(currentTimeMillis, current, desired, readDesired, transitionDesired)) {
+        public boolean advance(Liveliness liveliness,
+            Waterline current,
+            ReadWaterline readCurrent,
+            WriteWaterline writeCurrent,
+            TransitionQuorum transitionCurrent,
+            Waterline desired,
+            ReadWaterline readDesired,
+            WriteWaterline writeDesired,
+            TransitionQuorum transitionDesired) throws Exception {
+            if (recoverOrAwaitingQuorum(liveliness, current, desired, readCurrent, readDesired, writeCurrent, writeDesired, transitionDesired)) {
                 return false;
             }
 
-            Waterline currentLeader = highest(current.getMember(), currentTimeMillis, leader, readCurrent, current);
-            Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
+            Waterline currentLeader = highest(current.getMember(), leader, readCurrent, current);
+            Waterline desiredLeader = highest(current.getMember(), leader, readDesired, desired);
             if (currentLeader == null
                 || desiredLeader == null
                 || !currentLeader.isAtQuorum()
-                || !checkEquals(currentTimeMillis.get(), currentLeader, desiredLeader)
-                || !checkEquals(currentTimeMillis.get(), current, desired)) {
-                return transitionCurrent.transition(current, desired.getTimestamp(), inactive);
+                || !checkEquals(currentLeader, desiredLeader)
+                || !checkEquals(current, desired)) {
+                return transitionCurrent.transition(current, desired.getTimestamp(), inactive, readCurrent, readDesired, writeCurrent, writeDesired);
             }
             return false;
         }
@@ -169,28 +189,35 @@ public enum State {
     static class Leader implements Transistor {
 
         @Override
-        public boolean advance(CurrentTimeMillis currentTimeMillis, Waterline current, ReadWaterline readCurrent, TransitionQuorum transitionCurrent,
-            Waterline desired, ReadWaterline readDesired, TransitionQuorum transitionDesired) throws Exception {
+        public boolean advance(Liveliness liveliness,
+            Waterline current,
+            ReadWaterline readCurrent,
+            WriteWaterline writeCurrent,
+            TransitionQuorum transitionCurrent,
+            Waterline desired,
+            ReadWaterline readDesired,
+            WriteWaterline writeDesired,
+            TransitionQuorum transitionDesired) throws Exception {
 
-            if (!current.isAlive(currentTimeMillis.get())) {
+            if (!liveliness.isAlive(current.getMember())) {
                 // forge a unique, larger timestamp to chase
                 long desiredTimestamp = (desired != null ? desired.getTimestamp() : current.getTimestamp()) + 1;
                 if (desired == null || desired.getState() == leader) {
-                    transitionDesired.transition(desired, desiredTimestamp, follower);
+                    transitionDesired.transition(desired, desiredTimestamp, follower, readCurrent, readDesired, writeCurrent, writeDesired);
                     return false;
                 }
             }
-            if (recoverOrAwaitingQuorum(currentTimeMillis, current, desired, readDesired, transitionDesired)) {
+            if (recoverOrAwaitingQuorum(liveliness, current, desired, readCurrent, readDesired, writeCurrent, writeDesired, transitionDesired)) {
                 return false;
             }
 
-            Waterline currentLeader = highest(current.getMember(), currentTimeMillis, leader, readCurrent, current);
-            Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
+            Waterline currentLeader = highest(current.getMember(), leader, readCurrent, current);
+            Waterline desiredLeader = highest(current.getMember(), leader, readDesired, desired);
             boolean isFollower = false;
             if (currentLeader == null
                 || desiredLeader == null
                 || !desiredLeader.getMember().equals(current.getMember())) {
-                transitionDesired.transition(desired, desired.getTimestamp(), follower);
+                transitionDesired.transition(desired, desired.getTimestamp(), follower, readCurrent, readDesired, writeCurrent, writeDesired);
                 isFollower = true;
             }
 
@@ -198,8 +225,8 @@ public enum State {
                 || currentLeader == null
                 || desiredLeader == null
                 || !desiredLeader.isAtQuorum()
-                || !checkEquals(currentTimeMillis.get(), currentLeader, desiredLeader)) {
-                return transitionCurrent.transition(current, desired.getTimestamp(), demoted);
+                || !checkEquals(currentLeader, desiredLeader)) {
+                return transitionCurrent.transition(current, desired.getTimestamp(), demoted, readCurrent, readDesired, writeCurrent, writeDesired);
             }
             return false;
         }
@@ -209,24 +236,31 @@ public enum State {
     static class Demoted implements Transistor {
 
         @Override
-        public boolean advance(CurrentTimeMillis currentTimeMillis, Waterline current, ReadWaterline readCurrent, TransitionQuorum transitionCurrent,
-            Waterline desired, ReadWaterline readDesired, TransitionQuorum transitionDesired) throws Exception {
-            if (recoverOrAwaitingQuorum(currentTimeMillis, current, desired, readDesired, transitionDesired)) {
+        public boolean advance(Liveliness liveliness,
+            Waterline current,
+            ReadWaterline readCurrent,
+            WriteWaterline writeCurrent,
+            TransitionQuorum transitionCurrent,
+            Waterline desired,
+            ReadWaterline readDesired,
+            WriteWaterline writeDesired,
+            TransitionQuorum transitionDesired) throws Exception {
+            if (recoverOrAwaitingQuorum(liveliness, current, desired, readCurrent, readDesired, writeCurrent, writeDesired, transitionDesired)) {
                 return false;
             }
 
-            Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
+            Waterline desiredLeader = highest(current.getMember(), leader, readDesired, desired);
             if (desiredLeader != null) {
 
-                Waterline currentLeader = highest(current.getMember(), currentTimeMillis, leader, readCurrent, current);
+                Waterline currentLeader = highest(current.getMember(), leader, readCurrent, current);
                 if (desiredLeader.isAtQuorum()
-                    && checkEquals(currentTimeMillis.get(), desiredLeader, currentLeader)) {
-                    return transitionCurrent.transition(current, desired.getTimestamp(), inactive);
+                    && checkEquals(desiredLeader, currentLeader)) {
+                    return transitionCurrent.transition(current, desired.getTimestamp(), inactive, readCurrent, readDesired, writeCurrent, writeDesired);
                 }
                 if (desiredLeader.isAtQuorum()
                     && desiredLeader.getTimestamp() >= current.getTimestamp()
                     && desiredLeader.getMember().equals(current.getMember())) {
-                    return transitionCurrent.transition(current, desired.getTimestamp(), inactive);
+                    return transitionCurrent.transition(current, desired.getTimestamp(), inactive, readCurrent, readDesired, writeCurrent, writeDesired);
                 }
             }
             return false;
@@ -237,62 +271,71 @@ public enum State {
     static class Expunged implements Transistor {
 
         @Override
-        public boolean advance(CurrentTimeMillis currentTimeMillis, Waterline current, ReadWaterline readCurrent, TransitionQuorum transitionCurrent,
-            Waterline desired, ReadWaterline readDesired, TransitionQuorum transitionDesired) throws Exception {
-            if (recoverOrAwaitingQuorum(currentTimeMillis, current, desired, readDesired, transitionDesired)) {
+        public boolean advance(Liveliness liveliness,
+            Waterline current,
+            ReadWaterline readCurrent,
+            WriteWaterline writeCurrent,
+            TransitionQuorum transitionCurrent,
+            Waterline desired,
+            ReadWaterline readDesired,
+            WriteWaterline writeDesired,
+            TransitionQuorum transitionDesired) throws Exception {
+            if (recoverOrAwaitingQuorum(liveliness, current, desired, readCurrent, readDesired, writeCurrent, writeDesired, transitionDesired)) {
                 return false;
             }
 
             if (desired.getState() != expunged) {
-                return transitionCurrent.transition(current, desired.getTimestamp(), bootstrap);
+                return transitionCurrent.transition(current, desired.getTimestamp(), bootstrap, readCurrent, readDesired, writeCurrent, writeDesired);
             }
             return false;
         }
 
     }
 
-    static boolean recoverOrAwaitingQuorum(CurrentTimeMillis currentTimeMillis,
+    static boolean recoverOrAwaitingQuorum(Liveliness liveliness,
         Waterline current,
         Waterline desired,
+        ReadWaterline readCurrent,
         ReadWaterline readDesired,
+        WriteWaterline writeCurrent,
+        WriteWaterline writeDesired,
         TransitionQuorum transitionDesired) throws Exception {
 
-        if (!current.isAlive(currentTimeMillis.get())) {
+        if (!liveliness.isAlive(current.getMember())) {
             return true;
         }
 
-        Waterline desiredLeader = highest(current.getMember(), currentTimeMillis, leader, readDesired, desired);
-        boolean leaderIsLively = desiredLeader != null && desiredLeader.isAlive(currentTimeMillis.get());
+        Waterline desiredLeader = highest(current.getMember(), leader, readDesired, desired);
+        boolean leaderIsLively = desiredLeader != null && liveliness.isAlive(desiredLeader.getMember());
         if (desired == null) {
             // recover from lack of desired
             // "a.k.a delete facebook and hit the gym. a.a.k.a plenty of fish in the sea.", said Kevin. (circa 2015)
             if (desiredLeader != null && desiredLeader.getMember().equals(current.getMember())) {
                 return true;
             }
-            Waterline forged = new Waterline(current.getMember(), bootstrap, current.getTimestamp(), current.getVersion(), false, -1);
-            State desiredState = (leaderIsLively || !current.isAlive(currentTimeMillis.get())) ? follower : leader;
+            Waterline forged = new Waterline(current.getMember(), bootstrap, current.getTimestamp(), current.getVersion(), false);
+            State desiredState = (leaderIsLively || !liveliness.isAlive(current.getMember())) ? follower : leader;
             long desiredTimestamp = (desiredState == leader && desiredLeader != null) ? desiredLeader.getTimestamp() + 1 : current.getTimestamp();
-            transitionDesired.transition(forged, desiredTimestamp, desiredState);
+            transitionDesired.transition(forged, desiredTimestamp, desiredState, readCurrent, readDesired, writeCurrent, writeDesired);
             return true;
         }
 
-        if (!leaderIsLively && current.isAlive(currentTimeMillis.get()) && desired.getState() != leader && desired.getState() != expunged) {
+        if (!leaderIsLively && liveliness.isAlive(current.getMember()) && desired.getState() != leader && desired.getState() != expunged) {
             long desiredTimestamp = Math.max(desired.getTimestamp(), (desiredLeader != null) ? desiredLeader.getTimestamp() : 0) + 1;
-            transitionDesired.transition(desired, desiredTimestamp, leader);
+            transitionDesired.transition(desired, desiredTimestamp, leader, readCurrent, readDesired, writeCurrent, writeDesired);
             return true;
         }
 
         return !current.isAtQuorum() || !desired.isAtQuorum();
     }
 
-    static boolean atDesiredState(long timestamp, State state, Waterline current, Waterline desired) {
+    static boolean atDesiredState(State state, Waterline current, Waterline desired) {
         return (desired.getState() == state
             && desired.isAtQuorum()
-            && checkEquals(timestamp, desired, current));
+            && checkEquals(desired, current));
     }
 
     public static Waterline highest(Member member,
-        CurrentTimeMillis currentTimeMillis,
         State state,
         ReadWaterline readWaterline,
         Waterline me) throws Exception {
@@ -303,7 +346,7 @@ public enum State {
                 if (waterline[0] == null) {
                     waterline[0] = other;
                 } else {
-                    if (compare(currentTimeMillis, waterline[0], other) > 0) {
+                    if (compare(waterline[0], other) > 0) {
                         waterline[0] = other;
                     }
                 }
@@ -317,7 +360,7 @@ public enum State {
         return waterline[0];
     }
 
-    public static boolean checkEquals(long timestamp, Waterline a, Waterline b) {
+    public static boolean checkEquals(Waterline a, Waterline b) {
         if (a == b) {
             return true;
         }
@@ -331,16 +374,13 @@ public enum State {
         if (a.isAtQuorum() != b.isAtQuorum()) {
             return false;
         }
-        if (a.isAlive(timestamp) != b.isAlive(timestamp)) {
-            return false;
-        }
         if (a.getMember() != null ? !a.getMember().equals(b.getMember()) : b.getMember() != null) {
             return false;
         }
         return !(a.getState() != null ? !a.getState().equals(b.getState()) : b.getState() != null);
     }
 
-    public static int compare(CurrentTimeMillis currentTimeMillis, Waterline a, Waterline b) {
+    public static int compare(Waterline a, Waterline b) {
         int c = -Long.compare(a.getTimestamp(), b.getTimestamp());
         if (c != 0) {
             return c;
@@ -350,11 +390,6 @@ public enum State {
             return c;
         }
         c = -Boolean.compare(a.isAtQuorum(), b.isAtQuorum());
-        if (c != 0) {
-            return c;
-        }
-        long timstamp = currentTimeMillis.get();
-        c = -Boolean.compare(a.isAlive(timstamp), b.isAlive(timstamp));
         if (c != 0) {
             return c;
         }

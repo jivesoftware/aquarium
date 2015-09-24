@@ -1,6 +1,5 @@
 package com.jivesoftware.os.aquarium;
 
-import com.jivesoftware.os.aquarium.ReadWaterlineTx.Tx;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -13,64 +12,93 @@ public class Aquarium {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final OrderIdProvider versionProvider;
-    private final CurrentTimeMillis currentTimeMillis;
-    private final ReadWaterlineTx waterlineTx;
     private final TransitionQuorum transitionCurrent;
     private final TransitionQuorum transitionDesired;
+    private final Liveliness liveliness;
     private final Member member;
     private final AwaitLivelyEndState awaitLivelyEndState;
 
-    public Aquarium(OrderIdProvider versionProvider,
-        CurrentTimeMillis currentTimeMillis,
-        ReadWaterlineTx waterlineTx,
+    private final ReadWaterline readCurrent;
+    private final ReadWaterline readDesired;
+
+    private final WriteWaterline writeCurrent;
+    private final WriteWaterline writeDesired;
+
+    public <T> Aquarium(OrderIdProvider versionProvider,
+        StateStorage<T> currentStateStorage,
+        StateStorage<T> desiredStateStorage,
         TransitionQuorum transitionCurrent,
         TransitionQuorum transitionDesired,
+        Liveliness liveliness,
+        MemberLifecycle<T> memberLifecycle,
+        Class<T> lifecycleClass,
+        AtQuorum atQuorum,
         Member member,
         AwaitLivelyEndState awaitLivelyEndState) {
+
         this.versionProvider = versionProvider;
-        this.currentTimeMillis = currentTimeMillis;
-        this.waterlineTx = waterlineTx;
         this.transitionCurrent = transitionCurrent;
         this.transitionDesired = transitionDesired;
+        this.liveliness = liveliness;
         this.member = member;
         this.awaitLivelyEndState = awaitLivelyEndState;
+
+        this.readCurrent = new ReadWaterline<>(
+            currentStateStorage,
+            memberLifecycle,
+            atQuorum,
+            lifecycleClass);
+
+        this.readDesired = new ReadWaterline<>(
+            desiredStateStorage,
+            memberLifecycle,
+            atQuorum,
+            lifecycleClass);
+
+        this.writeCurrent = new WriteWaterline<>(currentStateStorage, memberLifecycle);
+        this.writeDesired = new WriteWaterline<>(desiredStateStorage, memberLifecycle);
     }
 
-    public <R> R inspectState(Tx<R> tx) throws Exception {
-        return waterlineTx.tx(tx);
+    public interface Tx<R> {
+
+        R tx(ReadWaterline readCurrent, ReadWaterline readDesired, WriteWaterline writeCurrent, WriteWaterline writeDesired) throws Exception;
+    }
+
+    public <R> R tx(Tx<R> tx) throws Exception {
+        return tx.tx(readCurrent, readDesired, writeCurrent, writeDesired);
+    }
+
+    public void acknowledgeOther() throws Exception {
+        readCurrent.acknowledgeOther(member);
+        readDesired.acknowledgeOther(member);
     }
 
     public void tapTheGlass() throws Exception {
-        waterlineTx.tx((current, desired) -> {
-            current.acknowledgeOther(member);
-            desired.acknowledgeOther(member);
+        awaitLivelyEndState.notifyChange(() -> {
 
-            awaitLivelyEndState.notifyChange(() -> {
-
-                while (true) {
-                    Waterline currentWaterline = current.get(member);
-                    if (currentWaterline == null) {
-                        currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true, Long.MAX_VALUE);
-                    }
-                    Waterline desiredWaterline = desired.get(member);
-                    //LOG.info("Tap {} current:{} desired:{}", member, currentWaterline, desiredWaterline);
-
-                    boolean advanced = currentWaterline.getState().transistor.advance(currentTimeMillis,
-                        currentWaterline,
-                        current,
-                        transitionCurrent,
-                        desiredWaterline,
-                        desired,
-                        transitionDesired);
-                    if (!advanced) {
-                        break;
-                    }
+            while (true) {
+                Waterline currentWaterline = readCurrent.get(member);
+                if (currentWaterline == null) {
+                    currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true);
                 }
+                Waterline desiredWaterline = readDesired.get(member);
+                //LOG.info("Tap {} current:{} desired:{}", member, currentWaterline, desiredWaterline);
 
-                return captureEndState(member, current, desired) != null;
-            });
+                boolean advanced = currentWaterline.getState().transistor.advance(liveliness,
+                    currentWaterline,
+                    readCurrent,
+                    writeCurrent,
+                    transitionCurrent,
+                    desiredWaterline,
+                    readDesired,
+                    writeDesired,
+                    transitionDesired);
+                if (!advanced) {
+                    break;
+                }
+            }
 
-            return true;
+            return captureEndState(member, readCurrent, readDesired) != null;
         });
     }
 
@@ -78,10 +106,12 @@ public class Aquarium {
      * @return null, leader or follower
      */
     public LivelyEndState livelyEndState() throws Exception {
-        return waterlineTx.tx((current, desired) -> new LivelyEndState(currentTimeMillis,
-            current.get(member),
-            desired.get(member),
-            State.highest(member, currentTimeMillis, State.leader, desired, desired.get(member))));
+        Waterline current = readCurrent.get(member);
+        Waterline desired = readDesired.get(member);
+        return new LivelyEndState(liveliness,
+            current,
+            desired,
+            State.highest(member, State.leader, readDesired, desired));
     }
 
     private Waterline captureEndState(Member asMember, ReadWaterline current, ReadWaterline desired) throws Exception {
@@ -89,9 +119,9 @@ public class Aquarium {
         Waterline desiredWaterline = desired.get(asMember);
 
         if (currentWaterline != null
-            && currentWaterline.isAlive(currentTimeMillis.get())
+            && liveliness.isAlive(asMember)
             && currentWaterline.isAtQuorum()
-            && State.checkEquals(currentTimeMillis.get(), currentWaterline, desiredWaterline)) {
+            && State.checkEquals(currentWaterline, desiredWaterline)) {
 
             if (desiredWaterline.getState() == State.leader || desiredWaterline.getState() == State.follower) {
                 return desiredWaterline;
@@ -101,12 +131,7 @@ public class Aquarium {
     }
 
     public Waterline getLeader() throws Exception {
-        Waterline[] leader = {null};
-        waterlineTx.tx((current, desired) -> {
-            leader[0] = State.highest(member, currentTimeMillis, State.leader, desired, desired.get(member));
-            return true;
-        });
-        return leader[0];
+        return State.highest(member, State.leader, readDesired, readDesired.get(member));
     }
 
     public LivelyEndState awaitOnline(long timeoutMillis) throws Exception {
@@ -117,42 +142,39 @@ public class Aquarium {
     }
 
     public boolean suggestState(State state) throws Exception {
-        return waterlineTx.tx((readCurrent, readDesired) -> transitionDesired.transition(readDesired.get(member), versionProvider.nextId(), state));
+        return transitionDesired.transition(readDesired.get(member),
+            versionProvider.nextId(),
+            state,
+            readCurrent,
+            readDesired,
+            writeCurrent,
+            writeDesired);
     }
 
     public Waterline getState(Member asMember) throws Exception {
-        Waterline[] state = new Waterline[1];
-        waterlineTx.tx((readCurrent, readDesired) -> {
-            Waterline current = readCurrent.get(asMember);
-            if (current == null) {
-                state[0] = new Waterline(asMember, State.bootstrap, -1, -1, false, -1);
-            } else {
-                state[0] = current;
-            }
-            return true;
-        });
-        return state[0];
+        Waterline current = readCurrent.get(asMember);
+        return (current != null) ? current : new Waterline(asMember, State.bootstrap, -1, -1, false);
     }
 
     public void expunge(Member asMember) throws Exception {
-        waterlineTx.tx((readCurrent, readDesired) -> {
-            transitionDesired.transition(readDesired.get(asMember), versionProvider.nextId(), State.expunged);
-            return true;
-        });
-        tapTheGlass();
+        transitionDesired.transition(readDesired.get(asMember),
+            versionProvider.nextId(),
+            State.expunged,
+            readCurrent,
+            readDesired,
+            writeCurrent,
+            writeDesired);
     }
 
     public boolean isLivelyState(Member asMember, State state) throws Exception {
+        if (!liveliness.isAlive(asMember)) {
+            return false;
+        }
         Waterline waterline = getState(asMember);
-        return waterline.getState() == state && waterline.isAtQuorum() && waterline.isAlive(currentTimeMillis.get());
+        return waterline.getState() == state && waterline.isAtQuorum();
     }
 
     public boolean isLivelyEndState(Member asMember) throws Exception {
-        boolean[] result = {false};
-        waterlineTx.tx((readCurrent, readDesired) -> {
-            result[0] = captureEndState(asMember, readCurrent, readDesired) != null;
-            return true;
-        });
-        return result[0];
+        return captureEndState(asMember, readCurrent, readDesired) != null;
     }
 }

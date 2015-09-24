@@ -1,20 +1,19 @@
 package com.jivesoftware.os.aquarium;
 
 /**
- *
  * @author jonathan.colt
  */
 public class LivelyEndState {
 
     public static final LivelyEndState ALWAYS_ONLINE = new LivelyEndState(null, Waterline.ALWAYS_ONLINE, Waterline.ALWAYS_ONLINE, null);
 
-    private final CurrentTimeMillis currentTimeMillis;
+    private final Liveliness liveliness;
     private final Waterline currentWaterline;
     private final Waterline desiredWaterline;
     private final Waterline leaderWaterline;
 
-    public LivelyEndState(CurrentTimeMillis currentTimeMillis, Waterline currentWaterline, Waterline desiredWaterline, Waterline leaderWaterline) {
-        this.currentTimeMillis = currentTimeMillis;
+    public LivelyEndState(Liveliness liveliness, Waterline currentWaterline, Waterline desiredWaterline, Waterline leaderWaterline) {
+        this.liveliness = liveliness;
         this.currentWaterline = currentWaterline;
         this.desiredWaterline = desiredWaterline;
         this.leaderWaterline = leaderWaterline;
@@ -32,15 +31,15 @@ public class LivelyEndState {
         return leaderWaterline;
     }
 
-    public boolean isOnline() {
-        if (currentTimeMillis == null) {
+    public boolean isOnline() throws Exception {
+        if (liveliness == null) {
             return currentWaterline.isAtQuorum();
         }
         return currentWaterline != null
             && currentWaterline.isAtQuorum()
             && (currentWaterline.getState() == State.follower || currentWaterline.getState() == State.leader)
-            && currentWaterline.isAlive(currentTimeMillis.get())
-            && State.checkEquals(currentTimeMillis.get(), currentWaterline, desiredWaterline);
+            && liveliness.isAlive(currentWaterline.getMember())
+            && State.checkEquals(currentWaterline, desiredWaterline);
     }
 
     @Override
@@ -56,7 +55,7 @@ public class LivelyEndState {
     @Override
     public String toString() {
         return "LivelyEndState{"
-            + "currentTimeMillis=" + currentTimeMillis
+            + "liveliness=" + liveliness
             + ", currentWaterline=" + currentWaterline
             + ", desiredWaterline=" + desiredWaterline
             + ", leaderWaterline=" + leaderWaterline
