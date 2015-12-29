@@ -34,6 +34,265 @@ public class AquariumNGTest {
     private static final byte LIVELINESS = 2;
 
     @Test
+    public void testTapTheGlassSingleNode() throws Exception {
+
+        NavigableMap<Key, TimestampedState<State>> rawState = new ConcurrentSkipListMap<>();
+        NavigableMap<Key, TimestampedState<Void>> rawLiveliness = new ConcurrentSkipListMap<>();
+
+        AtomicInteger rawRingSize = new AtomicInteger();
+        AtQuorum atQuorum = count -> count > rawRingSize.get() / 2;
+
+        Map<Member, Integer> rawLifecycles = Maps.newConcurrentMap();
+
+        int aquariumNodeCount = 1;
+        AquariumNode[] nodes = new AquariumNode[aquariumNodeCount];
+        int deadAfterMillis = 10_000;
+        for (int i = 0; i < aquariumNodeCount; i++) {
+            createNode(i, rawLifecycles, rawLiveliness, rawState, atQuorum, deadAfterMillis, nodes);
+        }
+
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(aquariumNodeCount);
+
+        int running = 0;
+        AquariumNode[] alive = new AquariumNode[aquariumNodeCount];
+        Future[] aliveFutures = new Future[aquariumNodeCount];
+        for (; running < 1; running++) {
+            rawLifecycles.compute(nodes[running].member, (member, value) -> (value != null) ? (value + 1) : 0);
+            aliveFutures[running] = service.scheduleWithFixedDelay(nodes[running], 10, 10, TimeUnit.MILLISECONDS);
+            rawRingSize.incrementAndGet();
+            alive[running] = nodes[running];
+        }
+        String mode = "Start with " + rawRingSize + " nodes...";
+        awaitLeader(mode, alive, rawRingSize);
+
+        mode = "Force each node to be a leader...";
+        AquariumNode leader = null;
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceDesiredState(State.leader);
+            leader = awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Force each leader to follower and the back to leader...";
+        for (int i = 0; i < running; i++) {
+
+            leader.forceDesiredState(State.follower);
+            leader.forceDesiredState(State.leader);
+            leader = awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Force all nodes to be a leader...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceDesiredState(State.leader);
+        }
+        awaitLeader(mode, alive, rawRingSize);
+
+        mode = "Force each node to be a follower...";
+        for (int i = 0; i < running; i++) {
+            if (i < running - 1) {
+                nodes[i].forceDesiredState(State.follower);
+            }
+            leader = awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Prove immune to clock drift by moving leader...";
+        for (int i = 0; i < 2; i++) {
+            leader.clockDrift.set(20_000 * ((i % 2 == 0) ? -1 : 1));
+            AquariumNode newLeader = awaitLeader(mode, alive, rawRingSize);
+            leader.clockDrift.set(0);
+            leader = newLeader;
+        }
+
+        mode = "Prove immune to clock drift by moving followers...";
+        for (int i = 0; i < running; i++) {
+            for (int j = 0; j < running; j++) {
+                if (nodes[j] != leader) {
+                    nodes[j].clockDrift.set(-20_000 * ((i % 2 == 0) ? -1 : 1));
+                }
+            }
+            AquariumNode newLeader = awaitLeader(mode, alive, rawRingSize);
+            leader.clockDrift.set(0);
+            leader = newLeader;
+            for (int j = 0; j < running; j++) {
+                nodes[j].clockDrift.set(0);
+            }
+        }
+
+        mode = "Add 5 more nodes...";
+        for (; running < nodes.length; running++) {
+            rawLifecycles.compute(nodes[running].member, (member, value) -> (value != null) ? (value + 1) : 0);
+            aliveFutures[running] = service.scheduleWithFixedDelay(nodes[running], 10, 10, TimeUnit.MILLISECONDS);
+            rawRingSize.incrementAndGet();
+            alive[running] = nodes[running];
+            awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Force each node to bootstrap...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.bootstrap);
+            awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Force each node to inactive...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.inactive);
+            awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Force each node to nominated...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.nominated);
+            awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Force each node to demoted...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.demoted);
+            awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Force each node to follower...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.follower);
+            awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Force each node to leader...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.leader);
+            awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Force last node to leader...";
+        nodes[nodes.length - 1].forceDesiredState(State.leader);
+        awaitLeader(mode, alive, rawRingSize);
+
+        mode = "Expunge 1 nodes...";
+        for (int i = 0; i < 1; i++) {
+            rawLifecycles.compute(nodes[i].member, (member, value) -> (value != null) ? (value + 1) : 0);
+            nodes[i].forceDesiredState(State.expunged);
+            nodes[i].awaitDesiredState(State.expunged, nodes);
+            if (aliveFutures[i].cancel(true)) {
+                alive[i] = null;
+                rawRingSize.decrementAndGet();
+            }
+            //awaitLeader(mode, alive, rawRingSize);
+        }
+        System.out.println("Expunged 1 node.");
+
+        mode = "Re-add 1 nodes...";
+        for (int i = 0; i < 1; i++) {
+            nodes[i].clear();
+            rawLifecycles.compute(nodes[i].member, (member, value) -> (value != null) ? (value + 1) : 0);
+            nodes[i].forceDesiredState(State.leader);
+            aliveFutures[i] = service.scheduleWithFixedDelay(nodes[i], 10, 10, TimeUnit.MILLISECONDS);
+            rawRingSize.incrementAndGet();
+            alive[i] = nodes[i];
+            nodes[i].awaitDesiredState(State.leader, nodes);
+            awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Blow away node state...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].clear();
+            nodes[i].awaitCurrentState(State.leader, State.follower);
+            awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Change lifecycles...";
+        for (int i = 0; i < running; i++) {
+            rawLifecycles.compute(nodes[i].member, (member, value) -> (value != null) ? (value + 1) : 0);
+            nodes[i].awaitCurrentState(State.leader, State.follower);
+            awaitLeader(mode, alive, rawRingSize);
+        }
+
+    }
+
+    private void createNode(int i, Map<Member, Integer> rawLifecycles, NavigableMap<Key, TimestampedState<Void>> rawLiveliness,
+        NavigableMap<Key, TimestampedState<State>> rawState, AtQuorum atQuorum, int deadAfterMillis, AquariumNode[] nodes) {
+        OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(i));
+
+        Member member = new Member(intBytes(i));
+
+        MemberLifecycle<Integer> memberLifecycle = member1 -> rawLifecycles.computeIfAbsent(member1, key -> 0);
+
+        LivelinessStorage livelinessStorage = new LivelinessStorage() {
+            @Override
+            public boolean scan(Member rootMember, Member otherMember, LivelinessStorage.LivelinessStream stream) throws Exception {
+                Member minA = (rootMember == null) ? MIN : rootMember;
+                Member maxA = (rootMember == null) ? MAX : rootMember;
+                Member minB = (otherMember == null) ? minA : otherMember;
+                SortedMap<Key, TimestampedState<Void>> subMap = rawLiveliness.subMap(new Key(LIVELINESS, minA, 0, minB), new Key(LIVELINESS, maxA, 0, MAX));
+                for (Map.Entry<Key, TimestampedState<Void>> e : subMap.entrySet()) {
+                    Key key = e.getKey();
+                    TimestampedState<Void> v = e.getValue();
+                    if (!stream.stream(key.a, key.isSelf, key.b, v.timestamp, v.version)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            @Override
+            public boolean update(LivelinessStorage.LivelinessUpdates updates) throws Exception {
+                return updates.updates((rootMember, otherMember, timestamp) -> {
+                    rawLiveliness.compute(new Key(LIVELINESS, rootMember, 0, otherMember), (key, myState) -> {
+                        long version = orderIdProvider.nextId();
+                        if (myState != null && (myState.timestamp > timestamp || (myState.timestamp == timestamp && myState.version > version))) {
+                            return myState;
+                        } else {
+                            return new TimestampedState<>(null, timestamp, version);
+                        }
+                    });
+                    return true;
+                });
+            }
+
+            @Override
+            public long get(Member rootMember, Member otherMember) throws Exception {
+                TimestampedState<Void> timestampedState = rawLiveliness.get(new Key(LIVELINESS, rootMember, 0, otherMember));
+                return timestampedState != null ? timestampedState.timestamp : -1;
+            }
+        };
+
+        ContextualStateStorage currentStateStorage = new ContextualStateStorage(orderIdProvider, rawState, CURRENT);
+        ContextualStateStorage desiredStateStorage = new ContextualStateStorage(orderIdProvider, rawState, DESIRED);
+
+        AtomicLong clockDrift = new AtomicLong(0);
+        CurrentTimeMillis currentTimeMillis = () -> System.currentTimeMillis() + clockDrift.get();
+        AtomicLong firstLivelinessTimestamp = new AtomicLong(-1);
+        Liveliness liveliness = new Liveliness(currentTimeMillis, livelinessStorage, member, atQuorum, deadAfterMillis, firstLivelinessTimestamp);
+        AtomicLong currentCount = new AtomicLong();
+        TransitionQuorum ifYoureLuckyCurrentTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired)
+            -> {
+            if (currentCount.incrementAndGet() % 2 == 0) {
+                writeCurrent.put(existing.getMember(), nextState, nextTimestamp);
+                return true;
+            }
+            return false;
+        };
+        AtomicLong desiredCount = new AtomicLong();
+        TransitionQuorum ifYoureLuckyDesiredTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired)
+            -> {
+            if (desiredCount.incrementAndGet() % 2 == 0) {
+                writeDesired.put(existing.getMember(), nextState, nextTimestamp);
+                return true;
+            }
+            return false;
+        };
+        nodes[i] = new AquariumNode(orderIdProvider,
+            currentStateStorage,
+            desiredStateStorage,
+            member,
+            firstLivelinessTimestamp,
+            liveliness,
+            memberLifecycle,
+            atQuorum,
+            ifYoureLuckyCurrentTransitionQuorum,
+            ifYoureLuckyDesiredTransitionQuorum,
+            clockDrift);
+    }
+
+    @Test
     public void testTapTheGlass() throws Exception {
 
         NavigableMap<Key, TimestampedState<State>> rawState = new ConcurrentSkipListMap<>();
@@ -48,98 +307,7 @@ public class AquariumNGTest {
         AquariumNode[] nodes = new AquariumNode[aquariumNodeCount];
         int deadAfterMillis = 10_000;
         for (int i = 0; i < aquariumNodeCount; i++) {
-            OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(i));
-
-            Member member = new Member(intBytes(i));
-
-            MemberLifecycle<Integer> memberLifecycle = member1 -> rawLifecycles.computeIfAbsent(member1, key -> 0);
-
-            LivelinessStorage livelinessStorage = new LivelinessStorage() {
-                @Override
-                public boolean scan(Member rootMember, Member otherMember, LivelinessStream stream) throws Exception {
-                    Member minA = (rootMember == null) ? MIN : rootMember;
-                    Member maxA = (rootMember == null) ? MAX : rootMember;
-                    Member minB = (otherMember == null) ? minA : otherMember;
-                    SortedMap<Key, TimestampedState<Void>> subMap = rawLiveliness.subMap(new Key(LIVELINESS, minA, 0, minB), new Key(LIVELINESS, maxA, 0, MAX));
-                    for (Map.Entry<Key, TimestampedState<Void>> e : subMap.entrySet()) {
-                        Key key = e.getKey();
-                        TimestampedState<Void> v = e.getValue();
-                        if (!stream.stream(key.a, key.isSelf, key.b, v.timestamp, v.version)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-
-                @Override
-                public boolean update(LivelinessUpdates updates) throws Exception {
-                    return updates.updates((rootMember, otherMember, timestamp) -> {
-                        rawLiveliness.compute(new Key(LIVELINESS, rootMember, 0, otherMember), (key, myState) -> {
-                            long version = orderIdProvider.nextId();
-                            if (myState != null && (myState.timestamp > timestamp || (myState.timestamp == timestamp && myState.version > version))) {
-                                return myState;
-                            } else {
-                                return new TimestampedState<>(null, timestamp, version);
-                            }
-                        });
-                        return true;
-                    });
-                }
-
-                @Override
-                public long get(Member rootMember, Member otherMember) throws Exception {
-                    TimestampedState<Void> timestampedState = rawLiveliness.get(new Key(LIVELINESS, rootMember, 0, otherMember));
-                    return timestampedState != null ? timestampedState.timestamp : -1;
-                }
-            };
-
-            ContextualStateStorage currentStateStorage = new ContextualStateStorage(orderIdProvider, rawState, CURRENT);
-            ContextualStateStorage desiredStateStorage = new ContextualStateStorage(orderIdProvider, rawState, DESIRED);
-
-            AtomicLong clockDrift = new AtomicLong(0);
-            CurrentTimeMillis currentTimeMillis = () -> System.currentTimeMillis() + clockDrift.get();
-            AtomicLong firstLivelinessTimestamp = new AtomicLong(-1);
-            Liveliness liveliness = new Liveliness(currentTimeMillis, livelinessStorage, member, atQuorum, deadAfterMillis, firstLivelinessTimestamp);
-            AtomicLong currentCount = new AtomicLong();
-            TransitionQuorum ifYoureLuckyCurrentTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired)
-                -> {
-                if (currentCount.incrementAndGet() % 2 == 0) {
-                    writeCurrent.put(existing.getMember(), nextState, nextTimestamp);
-                    return true;
-                }
-                return false;
-            };
-            AtomicLong desiredCount = new AtomicLong();
-            TransitionQuorum ifYoureLuckyDesiredTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired)
-                -> {
-                if (desiredCount.incrementAndGet() % 2 == 0) {
-                    writeDesired.put(existing.getMember(), nextState, nextTimestamp);
-                    return true;
-                }
-                return false;
-            };
-            TransitionQuorum currentTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
-                writeCurrent.put(existing.getMember(), nextState, nextTimestamp);
-                return true;
-            };
-            TransitionQuorum desiredTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
-                writeDesired.put(existing.getMember(), nextState, nextTimestamp);
-                return true;
-            };
-            nodes[i] = new AquariumNode(orderIdProvider,
-                currentStateStorage,
-                desiredStateStorage,
-                member,
-                firstLivelinessTimestamp,
-                liveliness,
-                memberLifecycle,
-                atQuorum,
-                ifYoureLuckyCurrentTransitionQuorum,
-                ifYoureLuckyDesiredTransitionQuorum,
-                currentTransitionQuorum,
-                desiredTransitionQuorum,
-                currentTimeMillis,
-                clockDrift);
+            createNode(i, rawLifecycles, rawLiveliness, rawState, atQuorum, deadAfterMillis, nodes);
         }
 
         ScheduledExecutorService service = Executors.newScheduledThreadPool(aquariumNodeCount);
@@ -345,9 +513,6 @@ public class AquariumNGTest {
         private final Member member;
         private final AtomicLong firstLivelinessTimestamp;
         private final Liveliness liveliness;
-        private final TransitionQuorum currentTransitionQuorum;
-        private final TransitionQuorum desiredTransitionQuorum;
-        private final CurrentTimeMillis currentTimeMillis;
         private final AtomicLong clockDrift;
 
         private final Aquarium aquarium;
@@ -362,9 +527,6 @@ public class AquariumNGTest {
             AtQuorum atQuorum,
             TransitionQuorum ifYoureLuckyCurrentTransitionQuorum,
             TransitionQuorum ifYoureLuckyDesiredTransitionQuorum,
-            TransitionQuorum currentTransitionQuorum,
-            TransitionQuorum desiredTransitionQuorum,
-            CurrentTimeMillis currentTimeMillis,
             AtomicLong clockDrift) {
 
             this.orderIdProvider = orderIdProvider;
@@ -373,9 +535,6 @@ public class AquariumNGTest {
             this.member = member;
             this.firstLivelinessTimestamp = firstLivelinessTimestamp;
             this.liveliness = liveliness;
-            this.currentTransitionQuorum = currentTransitionQuorum;
-            this.desiredTransitionQuorum = desiredTransitionQuorum;
-            this.currentTimeMillis = currentTimeMillis;
             this.clockDrift = clockDrift;
 
             this.aquarium = new Aquarium(orderIdProvider,
@@ -389,16 +548,16 @@ public class AquariumNGTest {
                 atQuorum,
                 member,
                 new AwaitLivelyEndState() {
-                    @Override
-                    public LivelyEndState awaitChange(Callable<LivelyEndState> awaiter, long timeoutMillis) throws Exception {
-                        return awaiter.call();
-                    }
+                @Override
+                public LivelyEndState awaitChange(Callable<LivelyEndState> awaiter, long timeoutMillis) throws Exception {
+                    return awaiter.call();
+                }
 
-                    @Override
-                    public void notifyChange(Callable<Boolean> change) throws Exception {
-                        change.call();
-                    }
-                });
+                @Override
+                public void notifyChange(Callable<Boolean> change) throws Exception {
+                    change.call();
+                }
+            });
         }
 
         public void forceDesiredState(State state) throws Exception {
@@ -430,7 +589,7 @@ public class AquariumNGTest {
 
         public void awaitCurrentState(State... states) throws Exception {
             Set<State> acceptable = Sets.newHashSet(states);
-            boolean[] reachedCurrent = { false };
+            boolean[] reachedCurrent = {false};
             while (!reachedCurrent[0]) {
                 aquarium.tx((readCurrent, readDesired, writeCurrent, writeDesired) -> {
                     Waterline currentWaterline = readCurrent.get(member);
@@ -445,9 +604,9 @@ public class AquariumNGTest {
         }
 
         public void awaitDesiredState(State state, AquariumNode[] nodes) throws Exception {
-            boolean[] reachedDesired = { false };
+            boolean[] reachedDesired = {false};
             while (!reachedDesired[0]) {
-                Waterline[] currentWaterline = { null };
+                Waterline[] currentWaterline = {null};
                 aquarium.tx((readCurrent, readDesired, writeCurrent, writeDesired) -> {
                     currentWaterline[0] = readCurrent.get(member);
                     if (currentWaterline[0] != null) {

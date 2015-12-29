@@ -55,13 +55,13 @@ public class Liveliness {
         /*LOG.info("Acknowledging others...");
         long start = currentTimeMillis.get();*/
 
-        long[] myAliveCurrentTimestamp = { -1L };
-        long[] myAliveLatestAck = { -1 };
+        long[] myAliveCurrentTimestamp = {-1L};
+        long[] myAliveLatestAck = {-1};
         Set<Member> myAliveAcked = Sets.newHashSet();
 
         livelinessStorage.update(setLiveliness -> {
             LivelinessEntry[] ackOtherE = new LivelinessEntry[1];
-            boolean[] ackOtherColdstart = { true };
+            boolean[] ackOtherColdstart = {true};
 
             //byte[] fromKey = stateKey(versionedPartitionName.getPartitionName(), context, versionedPartitionName.getPartitionVersion(), null, null);
             livelinessStorage.scan(null, null, (rootMember, isSelf, ackMember, timestamp, version) -> {
@@ -109,7 +109,12 @@ public class Liveliness {
         });
 
         if (myAliveCurrentTimestamp[0] != -1L && atQuorum.is(myAliveAcked.size())) {
-            myAliveUntilTimestamp.set(myAliveLatestAck[0] + deadAfterMillis);
+            if (myAliveLatestAck[0] < 0) {
+                // only member of the aquarium
+                myAliveUntilTimestamp.set(myAliveCurrentTimestamp[0] + deadAfterMillis);
+            } else {
+                myAliveUntilTimestamp.set(myAliveLatestAck[0] + deadAfterMillis);
+            }
         } else {
             myAliveUntilTimestamp.set(-1);
         }
