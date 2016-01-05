@@ -280,13 +280,6 @@ public enum State {
             ReadWaterline readDesired,
             WriteWaterline writeDesired,
             TransitionQuorum transitionDesired) throws Exception {
-            if (recoverOrAwaitingQuorum(liveliness, current, desired, readCurrent, readDesired, writeCurrent, writeDesired, transitionDesired)) {
-                return false;
-            }
-
-            if (desired.getState() != expunged) {
-                return transitionCurrent.transition(current, desired.getTimestamp(), bootstrap, readCurrent, readDesired, writeCurrent, writeDesired);
-            }
             return false;
         }
 
