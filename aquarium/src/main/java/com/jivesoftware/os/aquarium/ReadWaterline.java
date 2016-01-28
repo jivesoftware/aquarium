@@ -114,7 +114,7 @@ public class ReadWaterline<T> {
 
             //byte[] fromKey = stateKey(versionedPartitionName.getPartitionName(), context, versionedPartitionName.getPartitionVersion(), null, null);
             stateStorage.scan(null, null, null, (rootMember, isSelf, ackMember, lifecycle, state, timestamp, version) -> {
-                if (otherE[0] != null && !otherE[0].rootMember.equals(rootMember)) {
+                if (otherE[0] != null && (!otherE[0].rootMember.equals(rootMember) || !otherE[0].lifecycle.equals(lifecycle))) {
                     if (coldstart[0]) {
                         setState.set(otherE[0].rootMember, member, otherE[0].lifecycle, otherE[0].state, otherE[0].timestamp);
                     }

@@ -156,16 +156,6 @@ public class Aquarium {
         return (current != null) ? current : new Waterline(asMember, State.bootstrap, -1, -1, false);
     }
 
-    public void expunge(Member asMember) throws Exception {
-        transitionDesired.transition(readDesired.get(asMember),
-            versionProvider.nextId(),
-            State.expunged,
-            readCurrent,
-            readDesired,
-            writeCurrent,
-            writeDesired);
-    }
-
     public boolean isLivelyState(Member asMember, State state) throws Exception {
         if (!liveliness.isAlive(asMember)) {
             return false;
