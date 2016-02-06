@@ -62,4 +62,44 @@ public class Waterline {
             '}';
     }
 
+    public static boolean checkEquals(Waterline a, Waterline b) {
+        if (a == b) {
+            return true;
+        }
+        if (b == null) {
+            return false;
+        }
+        if (a.getTimestamp() != b.getTimestamp()) {
+            return false;
+        }
+        // don't compare version since they're always unique
+        if (a.isAtQuorum() != b.isAtQuorum()) {
+            return false;
+        }
+        if (a.getMember() != null ? !a.getMember().equals(b.getMember()) : b.getMember() != null) {
+            return false;
+        }
+        return !(a.getState() != null ? !a.getState().equals(b.getState()) : b.getState() != null);
+    }
+
+    public static int compare(Waterline a, Waterline b) {
+        int c = -Long.compare(a.getTimestamp(), b.getTimestamp());
+        if (c != 0) {
+            return c;
+        }
+        c = -Long.compare(a.getVersion(), b.getVersion());
+        if (c != 0) {
+            return c;
+        }
+        c = -Boolean.compare(a.isAtQuorum(), b.isAtQuorum());
+        if (c != 0) {
+            return c;
+        }
+        c = a.getState().compareTo(b.getState());
+        if (c != 0) {
+            return c;
+        }
+        return a.getMember().compareTo(b.getMember());
+    }
+
 }

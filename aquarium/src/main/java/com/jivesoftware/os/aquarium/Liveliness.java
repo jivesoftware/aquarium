@@ -1,8 +1,10 @@
 package com.jivesoftware.os.aquarium;
 
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
+import com.jivesoftware.os.aquarium.interfaces.CurrentTimeMillis;
+import com.jivesoftware.os.aquarium.interfaces.IsMemberAlive;
+import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -10,9 +12,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  *
  */
-public class Liveliness {
-
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+public class Liveliness implements IsMemberAlive {
 
     private final CurrentTimeMillis currentTimeMillis;
     private final LivelinessStorage livelinessStorage;

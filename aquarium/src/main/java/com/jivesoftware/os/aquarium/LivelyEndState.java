@@ -1,5 +1,7 @@
 package com.jivesoftware.os.aquarium;
 
+import com.jivesoftware.os.aquarium.interfaces.IsMemberAlive;
+
 /**
  * @author jonathan.colt
  */
@@ -7,13 +9,13 @@ public class LivelyEndState {
 
     public static final LivelyEndState ALWAYS_ONLINE = new LivelyEndState(null, Waterline.ALWAYS_ONLINE, Waterline.ALWAYS_ONLINE, null);
 
-    private final Liveliness liveliness;
+    private final IsMemberAlive isMemberAlive;
     private final Waterline currentWaterline;
     private final Waterline desiredWaterline;
     private final Waterline leaderWaterline;
 
-    public LivelyEndState(Liveliness liveliness, Waterline currentWaterline, Waterline desiredWaterline, Waterline leaderWaterline) {
-        this.liveliness = liveliness;
+    public LivelyEndState(IsMemberAlive isMemberAlive, Waterline currentWaterline, Waterline desiredWaterline, Waterline leaderWaterline) {
+        this.isMemberAlive = isMemberAlive;
         this.currentWaterline = currentWaterline;
         this.desiredWaterline = desiredWaterline;
         this.leaderWaterline = leaderWaterline;
@@ -32,14 +34,14 @@ public class LivelyEndState {
     }
 
     public boolean isOnline() throws Exception {
-        if (liveliness == null) {
+        if (isMemberAlive == null) {
             return currentWaterline.isAtQuorum();
         }
         return currentWaterline != null
             && currentWaterline.isAtQuorum()
             && (currentWaterline.getState() == State.follower || currentWaterline.getState() == State.leader)
-            && liveliness.isAlive(currentWaterline.getMember())
-            && State.checkEquals(currentWaterline, desiredWaterline);
+            && isMemberAlive.isAlive(currentWaterline.getMember())
+            && Waterline.checkEquals(currentWaterline, desiredWaterline);
     }
 
     @Override
@@ -55,7 +57,7 @@ public class LivelyEndState {
     @Override
     public String toString() {
         return "LivelyEndState{"
-            + "liveliness=" + liveliness
+            + "isMemberAlive=" + isMemberAlive
             + ", currentWaterline=" + currentWaterline
             + ", desiredWaterline=" + desiredWaterline
             + ", leaderWaterline=" + leaderWaterline

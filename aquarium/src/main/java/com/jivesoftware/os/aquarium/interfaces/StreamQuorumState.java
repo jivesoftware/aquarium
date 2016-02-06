@@ -1,4 +1,6 @@
-package com.jivesoftware.os.aquarium;
+package com.jivesoftware.os.aquarium.interfaces;
+
+import com.jivesoftware.os.aquarium.Waterline;
 
 /**
  *

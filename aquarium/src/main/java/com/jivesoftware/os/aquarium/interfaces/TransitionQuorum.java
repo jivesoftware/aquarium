@@ -1,4 +1,9 @@
-package com.jivesoftware.os.aquarium;
+package com.jivesoftware.os.aquarium.interfaces;
+
+import com.jivesoftware.os.aquarium.ReadWaterline;
+import com.jivesoftware.os.aquarium.State;
+import com.jivesoftware.os.aquarium.Waterline;
+import com.jivesoftware.os.aquarium.WriteWaterline;
 
 /**
  *

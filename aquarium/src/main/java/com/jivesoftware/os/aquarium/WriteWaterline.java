@@ -1,5 +1,7 @@
 package com.jivesoftware.os.aquarium;
 
+import com.jivesoftware.os.aquarium.interfaces.StateStorage;
+import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 

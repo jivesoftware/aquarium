@@ -1,5 +1,6 @@
-package com.jivesoftware.os.aquarium;
+package com.jivesoftware.os.aquarium.interfaces;
 
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import java.util.concurrent.Callable;
 
 /**

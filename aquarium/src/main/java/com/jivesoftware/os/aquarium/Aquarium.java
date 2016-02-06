@@ -1,15 +1,16 @@
 package com.jivesoftware.os.aquarium;
 
+import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
+import com.jivesoftware.os.aquarium.interfaces.AwaitLivelyEndState;
+import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
+import com.jivesoftware.os.aquarium.interfaces.StateStorage;
+import com.jivesoftware.os.aquarium.interfaces.TransitionQuorum;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 
 /**
  * @author jonathan.colt
  */
 public class Aquarium {
-
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final OrderIdProvider versionProvider;
     private final TransitionQuorum transitionCurrent;
@@ -121,7 +122,7 @@ public class Aquarium {
         if (currentWaterline != null
             && liveliness.isAlive(asMember)
             && currentWaterline.isAtQuorum()
-            && State.checkEquals(currentWaterline, desiredWaterline)) {
+            && Waterline.checkEquals(currentWaterline, desiredWaterline)) {
 
             if (desiredWaterline.getState() == State.leader || desiredWaterline.getState() == State.follower) {
                 return desiredWaterline;

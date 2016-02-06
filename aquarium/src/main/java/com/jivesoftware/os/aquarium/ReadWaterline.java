@@ -1,5 +1,9 @@
 package com.jivesoftware.os.aquarium;
 
+import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
+import com.jivesoftware.os.aquarium.interfaces.StateStorage;
+import com.jivesoftware.os.aquarium.interfaces.StreamQuorumState;
+import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;

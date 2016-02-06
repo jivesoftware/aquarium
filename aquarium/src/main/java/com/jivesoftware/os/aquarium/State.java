@@ -1,5 +1,8 @@
 package com.jivesoftware.os.aquarium;
 
+import com.jivesoftware.os.aquarium.interfaces.StreamQuorumState;
+import com.jivesoftware.os.aquarium.interfaces.TransitionQuorum;
+
 /**
  *
  */
@@ -13,8 +16,8 @@ public enum State {
     demoted((byte) 6, new Demoted()),
     expunged((byte) 7, new Expunged());
 
-    Transistor transistor;
-    byte serializedForm;
+    final Transistor transistor;
+    final byte serializedForm;
 
     State(byte serializedForm, Transistor transistor) {
         this.transistor = transistor;
@@ -90,8 +93,8 @@ public enum State {
 
             Waterline desiredLeader = highest(current.getMember(), leader, readDesired, desired);
             if (desiredLeader != null && desiredLeader.isAtQuorum()) {
-                boolean[] hasLeader = { false };
-                boolean[] hasNominated = { false };
+                boolean[] hasLeader = {false};
+                boolean[] hasNominated = {false};
                 readCurrent.getOthers(current.getMember(), (other) -> {
                     boolean otherIsAlive = liveliness.isAlive(other.getMember());
                     if (otherIsAlive && atDesiredState(leader, other, desiredLeader)) {
@@ -114,10 +117,8 @@ public enum State {
                     return false;
                 } else if (hasNominated[0]) {
                     return false;
-                } else {
-                    if (desired.getState() == leader) {
-                        return transitionCurrent.transition(current, desired.getTimestamp(), nominated, readCurrent, readDesired, writeCurrent, writeDesired);
-                    }
+                } else if (desired.getState() == leader) {
+                    return transitionCurrent.transition(current, desired.getTimestamp(), nominated, readCurrent, readDesired, writeCurrent, writeDesired);
                 }
             }
             return false;
@@ -177,8 +178,8 @@ public enum State {
             if (currentLeader == null
                 || desiredLeader == null
                 || !currentLeader.isAtQuorum()
-                || !checkEquals(currentLeader, desiredLeader)
-                || !checkEquals(current, desired)) {
+                || !Waterline.checkEquals(currentLeader, desiredLeader)
+                || !Waterline.checkEquals(current, desired)) {
                 return transitionCurrent.transition(current, desired.getTimestamp(), inactive, readCurrent, readDesired, writeCurrent, writeDesired);
             }
             return false;
@@ -225,7 +226,7 @@ public enum State {
                 || currentLeader == null
                 || desiredLeader == null
                 || !desiredLeader.isAtQuorum()
-                || !checkEquals(currentLeader, desiredLeader)) {
+                || !Waterline.checkEquals(currentLeader, desiredLeader)) {
                 return transitionCurrent.transition(current, desired.getTimestamp(), demoted, readCurrent, readDesired, writeCurrent, writeDesired);
             }
             return false;
@@ -254,7 +255,7 @@ public enum State {
 
                 Waterline currentLeader = highest(current.getMember(), leader, readCurrent, current);
                 if (desiredLeader.isAtQuorum()
-                    && checkEquals(desiredLeader, currentLeader)) {
+                    && Waterline.checkEquals(desiredLeader, currentLeader)) {
                     return transitionCurrent.transition(current, desired.getTimestamp(), inactive, readCurrent, readDesired, writeCurrent, writeDesired);
                 }
                 if (desiredLeader.isAtQuorum()
@@ -325,7 +326,7 @@ public enum State {
     static boolean atDesiredState(State state, Waterline current, Waterline desired) {
         return (desired.getState() == state
             && desired.isAtQuorum()
-            && checkEquals(desired, current));
+            && Waterline.checkEquals(desired, current));
     }
 
     public static Waterline highest(Member member,
@@ -338,10 +339,8 @@ public enum State {
             if (other.getState() == state) {
                 if (waterline[0] == null) {
                     waterline[0] = other;
-                } else {
-                    if (compare(waterline[0], other) > 0) {
-                        waterline[0] = other;
-                    }
+                } else if (Waterline.compare(waterline[0], other) > 0) {
+                    waterline[0] = other;
                 }
             }
             return true;
@@ -353,43 +352,4 @@ public enum State {
         return waterline[0];
     }
 
-    public static boolean checkEquals(Waterline a, Waterline b) {
-        if (a == b) {
-            return true;
-        }
-        if (b == null) {
-            return false;
-        }
-        if (a.getTimestamp() != b.getTimestamp()) {
-            return false;
-        }
-        // don't compare version since they're always unique
-        if (a.isAtQuorum() != b.isAtQuorum()) {
-            return false;
-        }
-        if (a.getMember() != null ? !a.getMember().equals(b.getMember()) : b.getMember() != null) {
-            return false;
-        }
-        return !(a.getState() != null ? !a.getState().equals(b.getState()) : b.getState() != null);
-    }
-
-    public static int compare(Waterline a, Waterline b) {
-        int c = -Long.compare(a.getTimestamp(), b.getTimestamp());
-        if (c != 0) {
-            return c;
-        }
-        c = -Long.compare(a.getVersion(), b.getVersion());
-        if (c != 0) {
-            return c;
-        }
-        c = -Boolean.compare(a.isAtQuorum(), b.isAtQuorum());
-        if (c != 0) {
-            return c;
-        }
-        c = a.getState().compareTo(b.getState());
-        if (c != 0) {
-            return c;
-        }
-        return a.getMember().compareTo(b.getMember());
-    }
 }

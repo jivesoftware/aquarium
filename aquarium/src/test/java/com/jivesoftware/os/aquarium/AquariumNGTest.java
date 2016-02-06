@@ -3,6 +3,13 @@ package com.jivesoftware.os.aquarium;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.primitives.UnsignedBytes;
+import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
+import com.jivesoftware.os.aquarium.interfaces.AwaitLivelyEndState;
+import com.jivesoftware.os.aquarium.interfaces.CurrentTimeMillis;
+import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage;
+import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
+import com.jivesoftware.os.aquarium.interfaces.StateStorage;
+import com.jivesoftware.os.aquarium.interfaces.TransitionQuorum;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -199,6 +206,13 @@ public class AquariumNGTest {
         }
 
         mode = "Change lifecycles...";
+        for (int i = 0; i < running; i++) {
+            rawLifecycles.compute(nodes[i].member, (member, value) -> (value != null) ? (value + 1) : 0);
+            nodes[i].awaitCurrentState(State.leader, State.follower);
+            awaitLeader(mode, alive, rawRingSize);
+        }
+
+        mode = "Change Force state";
         for (int i = 0; i < running; i++) {
             rawLifecycles.compute(nodes[i].member, (member, value) -> (value != null) ? (value + 1) : 0);
             nodes[i].awaitCurrentState(State.leader, State.follower);
@@ -456,12 +470,15 @@ public class AquariumNGTest {
             awaitLeader(mode, alive, rawRingSize);
         }
 
-        mode = "Change lifecycles...";
-        for (int i = 0; i < running; i++) {
-            rawLifecycles.compute(nodes[i].member, (member, value) -> (value != null) ? (value + 1) : 0);
-            nodes[i].awaitCurrentState(State.leader, State.follower);
-            awaitLeader(mode, alive, rawRingSize);
-        }
+        mode = "Force node to leader...";
+        nodes[0].forceCurrentState(State.leader);
+        awaitLeader(mode, alive, rawRingSize);
+        Assert.assertTrue(nodes[0].aquarium.suggestState(State.nominated)); // hmmm
+        awaitLeader(mode, alive, rawRingSize);
+
+        Assert.assertTrue(nodes[0].aquarium.isLivelyEndState(nodes[1].member));
+        Assert.assertTrue(nodes[0].aquarium.isLivelyState(nodes[1].member, State.follower)); // hmmm
+
 
     }
 
@@ -477,23 +494,31 @@ public class AquariumNGTest {
                 if (node == null) {
                     continue;
                 }
-
+                LivelyEndState awaitOnline = node.aquarium.awaitOnline(1000);
                 LivelyEndState livelyEndState = node.aquarium.livelyEndState();
                 if (livelyEndState != null) {
-                    if (livelyEndState.getCurrentState() == State.follower) {
-                        follower++;
-                    }
-                    if (livelyEndState.getCurrentState() == State.leader) {
-                        leader = node;
-                        leaders++;
+                    if (livelyEndState.isOnline()) {
+                        if (livelyEndState.getCurrentState() == State.follower) {
+
+                            Waterline leaderWaterLine = node.aquarium.getLeader();
+                            Assert.assertTrue(Waterline.checkEquals(leaderWaterLine, livelyEndState.getLeaderWaterline()));
+
+                            follower++;
+
+                        }
+                        if (livelyEndState.getCurrentState() == State.leader) {
+                            leader = node;
+                            leaders++;
+                        }
                     }
                 }
-
                 node.printState(mode);
-
             }
 
             if (leaders == 1 && (leaders + follower == ringSize.get())) {
+                //Assert.assertTrue(leader.aquarium.isLivelyState(leader.member, State.leader));
+                //Assert.assertTrue(leader.aquarium.isLivelyEndState(leader.member));
+
                 System.out.println("<<<<<<<<<<<<<<<<<<<< Hooray >>>>>>>>>>>>>>>>>>>>>>>>>>>>");
                 return leader;
             } else {
@@ -614,7 +639,7 @@ public class AquariumNGTest {
 
                         reachedDesired[0] = currentWaterline[0].getState() == state
                             && currentWaterline[0].isAtQuorum()
-                            && State.checkEquals(currentWaterline[0], desiredWaterline);
+                            && Waterline.checkEquals(currentWaterline[0], desiredWaterline);
                     }
                     return true;
                 });
