@@ -85,7 +85,7 @@ public class ReadWaterline<T> {
 
             if (otherMember[0] == null && isSelf && !asMember.equals(rootMember)) {
                 T lifecycle = memberLifecycle.get(rootMember);
-                if (lifecycle != null) {
+                if (lifecycle != null && rootLifecycle.equals(lifecycle)) {
                     otherMember[0] = rootMember;
                     otherState[0] = new TimestampedState(state, timestamp, version);
                     otherLifecycle[0] = lifecycle;
