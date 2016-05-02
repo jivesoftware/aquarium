@@ -200,15 +200,13 @@ public enum State {
             WriteWaterline writeDesired,
             TransitionQuorum transitionDesired) throws Exception {
 
-            if (!liveliness.isAlive(current.getMember())) {
-                // forge a unique, larger timestamp to chase
-                long desiredTimestamp = (desired != null ? desired.getTimestamp() : current.getTimestamp()) + 1;
-                if (desired == null || desired.getState() == leader) {
-                    transitionDesired.transition(desired, desiredTimestamp, follower, readCurrent, readDesired, writeCurrent, writeDesired);
-                    return false;
-                }
+            if (desired != null && desired.getState() == leader && !liveliness.isAlive(current.getMember())) {
+                // if we're an unlively leader, we need to re-take state at quorum to prevent dirty writes in the case of a split brain,
+                // which we can achieve by demoting ourselves!
+                return transitionCurrent.transition(current, desired.getTimestamp(), demoted, readCurrent, readDesired, writeCurrent, writeDesired);
             }
-            if (recoverOrAwaitingQuorum(liveliness, current, desired, readCurrent, readDesired, writeCurrent, writeDesired, transitionDesired)) {
+            if (recoverOrAwaitingQuorum(liveliness, current, desired, readCurrent, readDesired, writeCurrent, writeDesired, transitionDesired)
+                || desired == null) {
                 return false;
             }
 

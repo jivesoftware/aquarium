@@ -471,14 +471,32 @@ public class AquariumNGTest {
         }
 
         mode = "Force node to leader...";
-        nodes[0].forceCurrentState(State.leader);
-        awaitLeader(mode, alive, rawRingSize);
-        Assert.assertTrue(nodes[0].aquarium.suggestState(State.nominated)); // hmmm
-        awaitLeader(mode, alive, rawRingSize);
+        nodes[0].forceDesiredState(State.leader);
+        leader = awaitLeader(mode, alive, rawRingSize);
+        Assert.assertNotNull(leader);
 
-        Assert.assertTrue(nodes[0].aquarium.isLivelyEndState(nodes[1].member));
-        Assert.assertTrue(nodes[0].aquarium.isLivelyState(nodes[1].member, State.follower)); // hmmm
+        for (int i = 0; i < running; i++) {
+            Assert.assertTrue(nodes[0].aquarium.isLivelyEndState(nodes[i].member));
+            Assert.assertTrue(nodes[0].aquarium.isLivelyState(nodes[i].member, i == 0 ? State.leader : State.follower));
+        }
 
+        mode = "Force leader to demoted...";
+        nodes[0].forceCurrentState(State.demoted);
+        long currentTimestamp = nodes[0].aquarium.livelyEndState().getCurrentWaterline().getTimestamp();
+        long currentVersion = nodes[0].aquarium.livelyEndState().getCurrentWaterline().getVersion();
+
+        awaitLeader(mode, alive, rawRingSize);
+        long updatedTimestamp = nodes[0].aquarium.livelyEndState().getCurrentWaterline().getTimestamp();
+        long updatedVersion = nodes[0].aquarium.livelyEndState().getCurrentWaterline().getVersion();
+
+        // current version should have advanced when it re-achieved leader
+        Assert.assertEquals(updatedTimestamp, currentTimestamp);
+        Assert.assertTrue(updatedVersion > currentVersion);
+
+        for (int i = 0; i < running; i++) {
+            Assert.assertTrue(leader.aquarium.isLivelyEndState(nodes[i].member));
+            Assert.assertTrue(leader.aquarium.isLivelyState(nodes[i].member, i == 0 ? State.leader : State.follower)); // hmmm
+        }
 
     }
 
