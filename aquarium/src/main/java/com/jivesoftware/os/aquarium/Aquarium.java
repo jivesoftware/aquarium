@@ -2,6 +2,7 @@ package com.jivesoftware.os.aquarium;
 
 import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
 import com.jivesoftware.os.aquarium.interfaces.AwaitLivelyEndState;
+import com.jivesoftware.os.aquarium.interfaces.IsCurrentMember;
 import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
 import com.jivesoftware.os.aquarium.interfaces.StateStorage;
 import com.jivesoftware.os.aquarium.interfaces.TransitionQuorum;
@@ -34,6 +35,7 @@ public class Aquarium {
         MemberLifecycle<T> memberLifecycle,
         Class<T> lifecycleClass,
         AtQuorum atQuorum,
+        IsCurrentMember isCurrentMember,
         Member member,
         AwaitLivelyEndState awaitLivelyEndState) {
 
@@ -48,12 +50,14 @@ public class Aquarium {
             currentStateStorage,
             memberLifecycle,
             atQuorum,
+            isCurrentMember,
             lifecycleClass);
 
         this.readDesired = new ReadWaterline<>(
             desiredStateStorage,
             memberLifecycle,
             atQuorum,
+            isCurrentMember,
             lifecycleClass);
 
         this.writeCurrent = new WriteWaterline<>(currentStateStorage, memberLifecycle);

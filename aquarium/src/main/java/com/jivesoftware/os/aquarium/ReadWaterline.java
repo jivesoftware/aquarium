@@ -1,10 +1,11 @@
 package com.jivesoftware.os.aquarium;
 
+import com.google.common.collect.Sets;
 import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
+import com.jivesoftware.os.aquarium.interfaces.IsCurrentMember;
+import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
 import com.jivesoftware.os.aquarium.interfaces.StateStorage;
 import com.jivesoftware.os.aquarium.interfaces.StreamQuorumState;
-import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
-import com.google.common.collect.Sets;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.lang.reflect.Array;
@@ -20,26 +21,33 @@ public class ReadWaterline<T> {
     private final StateStorage<T> stateStorage;
     private final MemberLifecycle<T> memberLifecycle;
     private final AtQuorum atQuorum;
+    private final IsCurrentMember isCurrentMember;
     private final Class<T> lifecycleType;
 
     public ReadWaterline(StateStorage<T> stateStorage,
         MemberLifecycle<T> memberLifecycle,
         AtQuorum atQuorum,
+        IsCurrentMember isCurrentMember,
         Class<T> lifecycleType) {
         this.stateStorage = stateStorage;
         this.memberLifecycle = memberLifecycle;
         this.atQuorum = atQuorum;
+        this.isCurrentMember = isCurrentMember;
         this.lifecycleType = lifecycleType;
     }
 
     public Waterline get(Member asMember) throws Exception {
-        TimestampedState[] current = new TimestampedState[1];
-        Set<Member> acked = Sets.newHashSet();
+        if (!isCurrentMember.isCurrent(asMember)) {
+            return null;
+        }
+
         T lifecycle = memberLifecycle.get(asMember);
         if (lifecycle == null) {
             //LOG.info("Null lifecycle for {}", asMember);
             return null;
         }
+        TimestampedState[] current = new TimestampedState[1];
+        Set<Member> acked = Sets.newHashSet();
         stateStorage.scan(asMember, null, lifecycle, (rootRingMember, isSelf, ackRingMember, rootLifecycle, state, timestamp, version) -> {
             if (current[0] == null && isSelf) {
                 current[0] = new TimestampedState(state, timestamp, version);
@@ -70,6 +78,10 @@ public class ReadWaterline<T> {
         T[] otherLifecycle = (T[]) Array.newInstance(lifecycleType, 1);
         Set<Member> acked = Sets.newHashSet();
         stateStorage.scan(null, null, null, (rootMember, isSelf, ackMember, rootLifecycle, state, timestamp, version) -> {
+            if (!isCurrentMember.isCurrent(rootMember) || !isSelf && !isCurrentMember.isCurrent(ackMember)) {
+                return true;
+            }
+
             if (otherMember[0] != null && !otherMember[0].equals(rootMember)) {
                 boolean otherHasQuorum = atQuorum.is(acked.size());
                 stream.stream(new Waterline(otherMember[0],
@@ -118,6 +130,10 @@ public class ReadWaterline<T> {
 
             //byte[] fromKey = stateKey(versionedPartitionName.getPartitionName(), context, versionedPartitionName.getPartitionVersion(), null, null);
             stateStorage.scan(null, null, null, (rootMember, isSelf, ackMember, lifecycle, state, timestamp, version) -> {
+                if (!isCurrentMember.isCurrent(rootMember) || !isSelf && !isCurrentMember.isCurrent(ackMember)) {
+                    return true;
+                }
+
                 if (otherE[0] != null && (!otherE[0].rootMember.equals(rootMember) || !otherE[0].lifecycle.equals(lifecycle))) {
                     if (coldstart[0]) {
                         setState.set(otherE[0].rootMember, member, otherE[0].lifecycle, otherE[0].state, otherE[0].timestamp);

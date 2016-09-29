@@ -6,6 +6,7 @@ import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
 import com.jivesoftware.os.aquarium.interfaces.AwaitLivelyEndState;
 import com.jivesoftware.os.aquarium.interfaces.CurrentTimeMillis;
+import com.jivesoftware.os.aquarium.interfaces.IsCurrentMember;
 import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage;
 import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
 import com.jivesoftware.os.aquarium.interfaces.StateStorage;
@@ -48,6 +49,7 @@ public class AquariumNGTest {
 
         AtomicInteger rawRingSize = new AtomicInteger();
         AtQuorum atQuorum = count -> count > rawRingSize.get() / 2;
+        IsCurrentMember isCurrentMember = member1 -> true;
 
         Map<Member, Integer> rawLifecycles = Maps.newConcurrentMap();
 
@@ -55,7 +57,7 @@ public class AquariumNGTest {
         AquariumNode[] nodes = new AquariumNode[aquariumNodeCount];
         int deadAfterMillis = 10_000;
         for (int i = 0; i < aquariumNodeCount; i++) {
-            createNode(i, rawLifecycles, rawLiveliness, rawState, atQuorum, deadAfterMillis, nodes);
+            createNode(i, rawLifecycles, rawLiveliness, rawState, atQuorum, isCurrentMember, deadAfterMillis, nodes);
         }
 
         ScheduledExecutorService service = Executors.newScheduledThreadPool(aquariumNodeCount);
@@ -222,7 +224,7 @@ public class AquariumNGTest {
     }
 
     private void createNode(int i, Map<Member, Integer> rawLifecycles, NavigableMap<Key, TimestampedState<Void>> rawLiveliness,
-        NavigableMap<Key, TimestampedState<State>> rawState, AtQuorum atQuorum, int deadAfterMillis, AquariumNode[] nodes) {
+        NavigableMap<Key, TimestampedState<State>> rawState, AtQuorum atQuorum, IsCurrentMember isCurrentMember, int deadAfterMillis, AquariumNode[] nodes) {
         OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(i));
 
         Member member = new Member(intBytes(i));
@@ -301,6 +303,7 @@ public class AquariumNGTest {
             liveliness,
             memberLifecycle,
             atQuorum,
+            isCurrentMember,
             ifYoureLuckyCurrentTransitionQuorum,
             ifYoureLuckyDesiredTransitionQuorum,
             clockDrift);
@@ -314,6 +317,7 @@ public class AquariumNGTest {
 
         AtomicInteger rawRingSize = new AtomicInteger();
         AtQuorum atQuorum = count -> count > rawRingSize.get() / 2;
+        IsCurrentMember isCurrentMember = member1 -> true;
 
         Map<Member, Integer> rawLifecycles = Maps.newConcurrentMap();
 
@@ -321,7 +325,7 @@ public class AquariumNGTest {
         AquariumNode[] nodes = new AquariumNode[aquariumNodeCount];
         int deadAfterMillis = 10_000;
         for (int i = 0; i < aquariumNodeCount; i++) {
-            createNode(i, rawLifecycles, rawLiveliness, rawState, atQuorum, deadAfterMillis, nodes);
+            createNode(i, rawLifecycles, rawLiveliness, rawState, atQuorum, isCurrentMember, deadAfterMillis, nodes);
         }
 
         ScheduledExecutorService service = Executors.newScheduledThreadPool(aquariumNodeCount);
@@ -568,6 +572,7 @@ public class AquariumNGTest {
             Liveliness liveliness,
             MemberLifecycle<Integer> memberLifecycle,
             AtQuorum atQuorum,
+            IsCurrentMember isCurrentMember,
             TransitionQuorum ifYoureLuckyCurrentTransitionQuorum,
             TransitionQuorum ifYoureLuckyDesiredTransitionQuorum,
             AtomicLong clockDrift) {
@@ -589,18 +594,19 @@ public class AquariumNGTest {
                 memberLifecycle,
                 Integer.class,
                 atQuorum,
+                isCurrentMember,
                 member,
                 new AwaitLivelyEndState() {
-                @Override
-                public LivelyEndState awaitChange(Callable<LivelyEndState> awaiter, long timeoutMillis) throws Exception {
-                    return awaiter.call();
-                }
+                    @Override
+                    public LivelyEndState awaitChange(Callable<LivelyEndState> awaiter, long timeoutMillis) throws Exception {
+                        return awaiter.call();
+                    }
 
-                @Override
-                public void notifyChange(Callable<Boolean> change) throws Exception {
-                    change.call();
-                }
-            });
+                    @Override
+                    public void notifyChange(Callable<Boolean> change) throws Exception {
+                        change.call();
+                    }
+                });
         }
 
         public void forceDesiredState(State state) throws Exception {
@@ -632,7 +638,7 @@ public class AquariumNGTest {
 
         public void awaitCurrentState(State... states) throws Exception {
             Set<State> acceptable = Sets.newHashSet(states);
-            boolean[] reachedCurrent = {false};
+            boolean[] reachedCurrent = { false };
             while (!reachedCurrent[0]) {
                 aquarium.tx((readCurrent, readDesired, writeCurrent, writeDesired) -> {
                     Waterline currentWaterline = readCurrent.get(member);
@@ -647,9 +653,9 @@ public class AquariumNGTest {
         }
 
         public void awaitDesiredState(State state, AquariumNode[] nodes) throws Exception {
-            boolean[] reachedDesired = {false};
+            boolean[] reachedDesired = { false };
             while (!reachedDesired[0]) {
-                Waterline[] currentWaterline = {null};
+                Waterline[] currentWaterline = { null };
                 aquarium.tx((readCurrent, readDesired, writeCurrent, writeDesired) -> {
                     currentWaterline[0] = readCurrent.get(member);
                     if (currentWaterline[0] != null) {
