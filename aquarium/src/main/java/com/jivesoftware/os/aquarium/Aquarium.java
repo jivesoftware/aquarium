@@ -49,6 +49,7 @@ public class Aquarium {
                 if (existing != null && existing.getState() != null) {
                     aquariumStats.currentState.get(existing.getState()).decrement();
                 } else {
+                    aquariumStats.desiredState.get(State.bootstrap).decrement();
                     aquariumStats.currentState.get(State.bootstrap).decrement();
                 }
                 aquariumStats.currentState.get(nextState).increment();
@@ -62,6 +63,7 @@ public class Aquarium {
                     aquariumStats.desiredState.get(existing.getState()).decrement();
                 } else {
                     aquariumStats.desiredState.get(State.bootstrap).decrement();
+                    aquariumStats.currentState.get(State.bootstrap).decrement();
                 }
                 aquariumStats.desiredState.get(nextState).increment();
             }
