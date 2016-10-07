@@ -61,7 +61,7 @@ public class Aquarium {
                 if (existing != null && existing.getState() != null) {
                     aquariumStats.desiredState.get(existing.getState()).decrement();
                 } else {
-                    aquariumStats.currentState.get(State.bootstrap).decrement();
+                    aquariumStats.desiredState.get(State.bootstrap).decrement();
                 }
                 aquariumStats.desiredState.get(nextState).increment();
             }
@@ -119,7 +119,6 @@ public class Aquarium {
                 if (currentWaterline == null) {
                     currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true);
                     aquariumStats.currentState.get(State.bootstrap).increment();
-                    aquariumStats.desiredState.get(State.bootstrap).increment();
                 }
                 Waterline desiredWaterline = readDesired.get(member);
                 //LOG.info("Tap {} current:{} desired:{}", member, currentWaterline, desiredWaterline);
