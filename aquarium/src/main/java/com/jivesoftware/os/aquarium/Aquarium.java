@@ -95,11 +95,13 @@ public class Aquarium {
     }
 
     public void acknowledgeOther() throws Exception {
+        aquariumStats.acknowledgeOther.increment();
         readCurrent.acknowledgeOther(member);
         readDesired.acknowledgeOther(member);
     }
 
     public void tapTheGlass() throws Exception {
+        aquariumStats.tapTheGlass.increment();
         awaitLivelyEndState.notifyChange(() -> {
 
             while (true) {
@@ -132,6 +134,7 @@ public class Aquarium {
      * @return null, leader or follower
      */
     public LivelyEndState livelyEndState() throws Exception {
+        aquariumStats.getLivelyEndState.increment();
         Waterline current = readCurrent.get(member);
         Waterline desired = readDesired.get(member);
         return new LivelyEndState(liveliness,
@@ -157,14 +160,23 @@ public class Aquarium {
     }
 
     public Waterline getLeader() throws Exception {
+        aquariumStats.getLeader.increment();
         return State.highest(member, State.leader, readDesired, readDesired.get(member));
     }
 
     public LivelyEndState awaitOnline(long timeoutMillis) throws Exception {
-        return awaitLivelyEndState.awaitChange(() -> {
-            LivelyEndState livelyEndState = livelyEndState();
-            return livelyEndState.isOnline() ? livelyEndState : null;
-        }, timeoutMillis);
+        try {
+            aquariumStats.awaitOnline.increment();
+            LivelyEndState endState = awaitLivelyEndState.awaitChange(() -> {
+                LivelyEndState livelyEndState = livelyEndState();
+                return livelyEndState.isOnline() ? livelyEndState : null;
+            }, timeoutMillis);
+
+            return endState;
+        } catch (Exception x) {
+            aquariumStats.awaitTimedOut.increment();
+            throw x;
+        }
     }
 
     public boolean suggestState(State state) throws Exception {

@@ -9,6 +9,16 @@ import java.util.concurrent.atomic.LongAdder;
  */
 public class AquariumStats {
 
+    public final LongAdder feedTheFish = new LongAdder();
+    public final LongAdder acknowledgeOther = new LongAdder();
+    public final LongAdder tapTheGlass = new LongAdder();
+
+    public final LongAdder getLivelyEndState = new LongAdder();
+    public final LongAdder getLeader = new LongAdder();
+
+    public final LongAdder awaitOnline = new LongAdder();
+    public final LongAdder awaitTimedOut = new LongAdder();
+
     public final LongAdder getMyDesiredWaterline = new LongAdder();
     public final LongAdder getOthersDesiredWaterline = new LongAdder();
     public final LongAdder acknowledgeDesiredOther = new LongAdder();
@@ -16,8 +26,6 @@ public class AquariumStats {
     public final LongAdder getMyCurrentWaterline = new LongAdder();
     public final LongAdder getOthersCurrentWaterline = new LongAdder();
     public final LongAdder acknowledgeCurrentOther = new LongAdder();
-
-    public final LongAdder feedTheFish = new LongAdder();
 
     public final EnumMap<State, LongAdder> desiredState = new EnumMap<>(State.class);
     public final EnumMap<State, LongAdder> currentState = new EnumMap<>(State.class);
