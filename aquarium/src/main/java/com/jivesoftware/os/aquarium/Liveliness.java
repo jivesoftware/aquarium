@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class Liveliness implements IsMemberAlive {
 
+    private final AquariumStats aquariumStats;
     private final CurrentTimeMillis currentTimeMillis;
     private final LivelinessStorage livelinessStorage;
     private final Member member;
@@ -24,12 +25,15 @@ public class Liveliness implements IsMemberAlive {
     private final AtomicLong myAliveUntilTimestamp = new AtomicLong(-1);
     private final ConcurrentHashMap<Member, Long> otherAliveUntilTimestamp = new ConcurrentHashMap<>();
 
-    public Liveliness(CurrentTimeMillis currentTimeMillis,
+    public Liveliness(AquariumStats aquariumStats,
+        CurrentTimeMillis currentTimeMillis,
         LivelinessStorage livelinessStorage,
         Member member,
         AtQuorum atQuorum,
         long deadAfterMillis,
         AtomicLong firstLivelinessTimestamp) {
+
+        this.aquariumStats = aquariumStats;
         this.currentTimeMillis = currentTimeMillis;
         this.livelinessStorage = livelinessStorage;
         this.atQuorum = atQuorum;
@@ -39,6 +43,7 @@ public class Liveliness implements IsMemberAlive {
     }
 
     public void feedTheFish() throws Exception {
+        aquariumStats.feedTheFish.add(1);
         blowBubbles();
         acknowledgeOther();
     }

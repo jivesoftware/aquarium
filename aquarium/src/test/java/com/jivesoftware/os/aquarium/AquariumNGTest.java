@@ -276,7 +276,7 @@ public class AquariumNGTest {
         AtomicLong clockDrift = new AtomicLong(0);
         CurrentTimeMillis currentTimeMillis = () -> System.currentTimeMillis() + clockDrift.get();
         AtomicLong firstLivelinessTimestamp = new AtomicLong(-1);
-        Liveliness liveliness = new Liveliness(currentTimeMillis, livelinessStorage, member, atQuorum, deadAfterMillis, firstLivelinessTimestamp);
+        Liveliness liveliness = new Liveliness(new AquariumStats(), currentTimeMillis, livelinessStorage, member, atQuorum, deadAfterMillis, firstLivelinessTimestamp);
         AtomicLong currentCount = new AtomicLong();
         TransitionQuorum ifYoureLuckyCurrentTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired)
             -> {
@@ -585,7 +585,8 @@ public class AquariumNGTest {
             this.liveliness = liveliness;
             this.clockDrift = clockDrift;
 
-            this.aquarium = new Aquarium(orderIdProvider,
+            this.aquarium = new Aquarium(new AquariumStats(),
+                orderIdProvider,
                 currentStateStorage,
                 desiredStateStorage,
                 ifYoureLuckyCurrentTransitionQuorum,

@@ -13,6 +13,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
  */
 public class Aquarium {
 
+    private final AquariumStats aquariumStats;
     private final OrderIdProvider versionProvider;
     private final TransitionQuorum transitionCurrent;
     private final TransitionQuorum transitionDesired;
@@ -26,11 +27,12 @@ public class Aquarium {
     private final WriteWaterline writeCurrent;
     private final WriteWaterline writeDesired;
 
-    public <T> Aquarium(OrderIdProvider versionProvider,
+    public <T> Aquarium(AquariumStats aquariumStats,
+        OrderIdProvider versionProvider,
         StateStorage<T> currentStateStorage,
         StateStorage<T> desiredStateStorage,
-        TransitionQuorum transitionCurrent,
-        TransitionQuorum transitionDesired,
+        TransitionQuorum current,
+        TransitionQuorum desired,
         Liveliness liveliness,
         MemberLifecycle<T> memberLifecycle,
         Class<T> lifecycleClass,
@@ -39,14 +41,30 @@ public class Aquarium {
         Member member,
         AwaitLivelyEndState awaitLivelyEndState) {
 
+        this.aquariumStats = aquariumStats;
         this.versionProvider = versionProvider;
-        this.transitionCurrent = transitionCurrent;
-        this.transitionDesired = transitionDesired;
+        this.transitionCurrent = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
+            boolean transitioned = current.transition(existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired);
+            if (transitioned) {
+                aquariumStats.currentState.get(nextState).increment();
+            }
+            return transitioned;
+        };
+        this.transitionDesired = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
+            boolean transitioned = desired.transition(existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired);
+            if (transitioned) {
+                aquariumStats.desiredState.get(nextState).increment();
+            }
+            return transitioned;
+        };
         this.liveliness = liveliness;
         this.member = member;
         this.awaitLivelyEndState = awaitLivelyEndState;
 
         this.readCurrent = new ReadWaterline<>(
+            aquariumStats.getMyCurrentWaterline,
+            aquariumStats.getOthersCurrentWaterline,
+            aquariumStats.acknowledgeCurrentOther,
             currentStateStorage,
             memberLifecycle,
             atQuorum,
@@ -54,6 +72,9 @@ public class Aquarium {
             lifecycleClass);
 
         this.readDesired = new ReadWaterline<>(
+            aquariumStats.getMyDesiredWaterline,
+            aquariumStats.getOthersDesiredWaterline,
+            aquariumStats.acknowledgeDesiredOther,
             desiredStateStorage,
             memberLifecycle,
             atQuorum,
@@ -147,6 +168,7 @@ public class Aquarium {
     }
 
     public boolean suggestState(State state) throws Exception {
+
         return transitionDesired.transition(readDesired.get(member),
             versionProvider.nextId(),
             state,

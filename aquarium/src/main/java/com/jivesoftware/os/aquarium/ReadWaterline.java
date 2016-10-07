@@ -6,29 +6,36 @@ import com.jivesoftware.os.aquarium.interfaces.IsCurrentMember;
 import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
 import com.jivesoftware.os.aquarium.interfaces.StateStorage;
 import com.jivesoftware.os.aquarium.interfaces.StreamQuorumState;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.lang.reflect.Array;
 import java.util.Set;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * @author jonathan.colt
  */
 public class ReadWaterline<T> {
 
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-
+    private final LongAdder getMyWaterline;
+    private final LongAdder getOthersWaterline;
+    private final LongAdder acknowledgeOther;
     private final StateStorage<T> stateStorage;
     private final MemberLifecycle<T> memberLifecycle;
     private final AtQuorum atQuorum;
     private final IsCurrentMember isCurrentMember;
     private final Class<T> lifecycleType;
 
-    public ReadWaterline(StateStorage<T> stateStorage,
+    public ReadWaterline(LongAdder getMyWaterline,
+        LongAdder getOthersWaterline,
+        LongAdder acknowledgeOther,
+        StateStorage<T> stateStorage,
         MemberLifecycle<T> memberLifecycle,
         AtQuorum atQuorum,
         IsCurrentMember isCurrentMember,
         Class<T> lifecycleType) {
+
+        this.getMyWaterline = getMyWaterline;
+        this.getOthersWaterline = getOthersWaterline;
+        this.acknowledgeOther = acknowledgeOther;
         this.stateStorage = stateStorage;
         this.memberLifecycle = memberLifecycle;
         this.atQuorum = atQuorum;
@@ -37,6 +44,7 @@ public class ReadWaterline<T> {
     }
 
     public Waterline get(Member asMember) throws Exception {
+        getMyWaterline.add(1);
         if (!isCurrentMember.isCurrent(asMember)) {
             return null;
         }
@@ -72,6 +80,8 @@ public class ReadWaterline<T> {
     }
 
     public void getOthers(Member asMember, StreamQuorumState stream) throws Exception {
+        getOthersWaterline.add(1);
+
         Member[] otherMember = new Member[1];
         TimestampedState[] otherState = new TimestampedState[1];
         @SuppressWarnings("unchecked")
@@ -123,10 +133,12 @@ public class ReadWaterline<T> {
     }
 
     public void acknowledgeOther(Member member) throws Exception {
+        acknowledgeOther.add(1);
+
         stateStorage.update(setState -> {
             @SuppressWarnings("unchecked")
             StateEntry<T>[] otherE = (StateEntry<T>[]) new StateEntry[1];
-            boolean[] coldstart = { true };
+            boolean[] coldstart = {true};
 
             //byte[] fromKey = stateKey(versionedPartitionName.getPartitionName(), context, versionedPartitionName.getPartitionVersion(), null, null);
             stateStorage.scan(null, null, null, (rootMember, isSelf, ackMember, lifecycle, state, timestamp, version) -> {
@@ -192,11 +204,11 @@ public class ReadWaterline<T> {
 
         @Override
         public String toString() {
-            return "TimestampedState{" +
-                "state=" + state +
-                ", timestamp=" + timestamp +
-                ", version=" + version +
-                '}';
+            return "TimestampedState{"
+                + "state=" + state
+                + ", timestamp=" + timestamp
+                + ", version=" + version
+                + '}';
         }
     }
 
