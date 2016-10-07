@@ -46,6 +46,7 @@ public class Aquarium {
         this.transitionCurrent = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
             boolean transitioned = current.transition(existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired);
             if (transitioned) {
+                aquariumStats.currentState.get(existing.getState()).decrement();
                 aquariumStats.currentState.get(nextState).increment();
             }
             return transitioned;
@@ -53,6 +54,7 @@ public class Aquarium {
         this.transitionDesired = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
             boolean transitioned = desired.transition(existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired);
             if (transitioned) {
+                aquariumStats.desiredState.get(existing.getState()).decrement();
                 aquariumStats.desiredState.get(nextState).increment();
             }
             return transitioned;
