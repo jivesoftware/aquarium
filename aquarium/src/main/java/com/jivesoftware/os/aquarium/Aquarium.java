@@ -47,7 +47,9 @@ public class Aquarium {
             boolean transitioned = current.transition(existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired);
             if (transitioned) {
                 if (existing != null && existing.getState() != null) {
-                    aquariumStats.currentState.get(existing.getState()).decrement();
+                    if (existing.getState() != State.bootstrap) {
+                        aquariumStats.currentState.get(existing.getState()).decrement();
+                    }
                 }
                 if (nextState != State.bootstrap) {
                     aquariumStats.currentState.get(nextState).increment();
@@ -59,7 +61,9 @@ public class Aquarium {
             boolean transitioned = desired.transition(existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired);
             if (transitioned) {
                 if (existing != null && existing.getState() != null) {
-                    aquariumStats.desiredState.get(existing.getState()).decrement();
+                    if (existing.getState() != State.bootstrap) {
+                        aquariumStats.desiredState.get(existing.getState()).decrement();
+                    }
                 }
                 if (nextState != State.bootstrap) {
                     aquariumStats.desiredState.get(nextState).increment();
