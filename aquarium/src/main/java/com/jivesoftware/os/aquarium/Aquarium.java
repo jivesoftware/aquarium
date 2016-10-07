@@ -48,11 +48,10 @@ public class Aquarium {
             if (transitioned) {
                 if (existing != null && existing.getState() != null) {
                     aquariumStats.currentState.get(existing.getState()).decrement();
-                } else {
-                    aquariumStats.desiredState.get(State.bootstrap).decrement();
-                    //aquariumStats.currentState.get(State.bootstrap).decrement();
                 }
-                aquariumStats.currentState.get(nextState).increment();
+                if (nextState != State.bootstrap) {
+                    aquariumStats.currentState.get(nextState).increment();
+                }
             }
             return transitioned;
         };
@@ -61,11 +60,10 @@ public class Aquarium {
             if (transitioned) {
                 if (existing != null && existing.getState() != null) {
                     aquariumStats.desiredState.get(existing.getState()).decrement();
-                } else {
-                    aquariumStats.desiredState.get(State.bootstrap).decrement();
-                    //aquariumStats.currentState.get(State.bootstrap).decrement();
                 }
-                aquariumStats.desiredState.get(nextState).increment();
+                if (nextState != State.bootstrap) {
+                    aquariumStats.desiredState.get(nextState).increment();
+                }
             }
             return transitioned;
         };
@@ -112,34 +110,36 @@ public class Aquarium {
         readDesired.acknowledgeOther(member);
     }
 
+    private final Object tapTheGlassLock = new Object();
+
     public void tapTheGlass() throws Exception {
         aquariumStats.tapTheGlass.increment();
         awaitLivelyEndState.notifyChange(() -> {
 
-            while (true) {
-                Waterline currentWaterline = readCurrent.get(member);
-                if (currentWaterline == null) {
-                    currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true);
-                    aquariumStats.desiredState.get(State.bootstrap).increment();
-                }
-                Waterline desiredWaterline = readDesired.get(member);
-                //LOG.info("Tap {} current:{} desired:{}", member, currentWaterline, desiredWaterline);
+            synchronized (tapTheGlassLock) {
+                while (true) {
+                    Waterline currentWaterline = readCurrent.get(member);
+                    if (currentWaterline == null) {
+                        currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true);
+                    }
+                    Waterline desiredWaterline = readDesired.get(member);
+                    //LOG.info("Tap {} current:{} desired:{}", member, currentWaterline, desiredWaterline);
 
-                boolean advanced = currentWaterline.getState().transistor.advance(liveliness,
-                    currentWaterline,
-                    readCurrent,
-                    writeCurrent,
-                    transitionCurrent,
-                    desiredWaterline,
-                    readDesired,
-                    writeDesired,
-                    transitionDesired);
-                if (!advanced) {
-                    break;
+                    boolean advanced = currentWaterline.getState().transistor.advance(liveliness,
+                        currentWaterline,
+                        readCurrent,
+                        writeCurrent,
+                        transitionCurrent,
+                        desiredWaterline,
+                        readDesired,
+                        writeDesired,
+                        transitionDesired);
+                    if (!advanced) {
+                        break;
+                    }
                 }
+                return captureEndState(member, readCurrent, readDesired) != null;
             }
-
-            return captureEndState(member, readCurrent, readDesired) != null;
         });
     }
 
