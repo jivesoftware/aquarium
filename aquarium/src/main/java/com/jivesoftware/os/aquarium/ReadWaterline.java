@@ -44,7 +44,7 @@ public class ReadWaterline<T> {
     }
 
     public Waterline get(Member asMember) throws Exception {
-        getMyWaterline.add(1);
+        getMyWaterline.increment();
         if (!isCurrentMember.isCurrent(asMember)) {
             return null;
         }
@@ -80,7 +80,7 @@ public class ReadWaterline<T> {
     }
 
     public void getOthers(Member asMember, StreamQuorumState stream) throws Exception {
-        getOthersWaterline.add(1);
+        getOthersWaterline.increment();
 
         Member[] otherMember = new Member[1];
         TimestampedState[] otherState = new TimestampedState[1];
@@ -133,7 +133,7 @@ public class ReadWaterline<T> {
     }
 
     public void acknowledgeOther(Member member) throws Exception {
-        acknowledgeOther.add(1);
+        acknowledgeOther.increment();
 
         stateStorage.update(setState -> {
             @SuppressWarnings("unchecked")

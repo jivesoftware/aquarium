@@ -119,7 +119,7 @@ public class Aquarium {
     public void tapTheGlass() throws Exception {
         aquariumStats.tapTheGlass.increment();
         awaitLivelyEndState.notifyChange(() -> {
-
+            aquariumStats.tapTheGlassNotified.increment();
             synchronized (tapTheGlassLock) {
                 while (true) {
                     Waterline currentWaterline = readCurrent.get(member);
@@ -127,8 +127,7 @@ public class Aquarium {
                         currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true);
                     }
                     Waterline desiredWaterline = readDesired.get(member);
-                    //LOG.info("Tap {} current:{} desired:{}", member, currentWaterline, desiredWaterline);
-
+                    
                     boolean advanced = currentWaterline.getState().transistor.advance(liveliness,
                         currentWaterline,
                         readCurrent,
@@ -161,6 +160,7 @@ public class Aquarium {
     }
 
     private Waterline captureEndState(Member asMember, ReadWaterline current, ReadWaterline desired) throws Exception {
+        aquariumStats.captureEndState.increment();
         Waterline currentWaterline = current.get(asMember);
         Waterline desiredWaterline = desired.get(asMember);
 
@@ -197,7 +197,7 @@ public class Aquarium {
     }
 
     public boolean suggestState(State state) throws Exception {
-
+        aquariumStats.suggestState.increment();
         return transitionDesired.transition(readDesired.get(member),
             versionProvider.nextId(),
             state,
@@ -208,11 +208,13 @@ public class Aquarium {
     }
 
     public Waterline getState(Member asMember) throws Exception {
+        aquariumStats.getStateForMember.increment();
         Waterline current = readCurrent.get(asMember);
         return (current != null) ? current : new Waterline(asMember, State.bootstrap, -1, -1, false);
     }
 
     public boolean isLivelyState(Member asMember, State state) throws Exception {
+        aquariumStats.isLivelyStateForMember.increment();
         if (!liveliness.isAlive(asMember)) {
             return false;
         }
@@ -221,6 +223,7 @@ public class Aquarium {
     }
 
     public boolean isLivelyEndState(Member asMember) throws Exception {
+        aquariumStats.isLivelyEndStateForMember.increment();
         return captureEndState(asMember, readCurrent, readDesired) != null;
     }
 }

@@ -12,9 +12,16 @@ public class AquariumStats {
     public final LongAdder feedTheFish = new LongAdder();
     public final LongAdder acknowledgeOther = new LongAdder();
     public final LongAdder tapTheGlass = new LongAdder();
+    public final LongAdder tapTheGlassNotified = new LongAdder();
+    public final LongAdder captureEndState = new LongAdder();
 
     public final LongAdder getLivelyEndState = new LongAdder();
+    public final LongAdder suggestState = new LongAdder();
     public final LongAdder getLeader = new LongAdder();
+
+    public final LongAdder getStateForMember = new LongAdder();
+    public final LongAdder isLivelyStateForMember = new LongAdder();
+    public final LongAdder isLivelyEndStateForMember = new LongAdder();
 
     public final LongAdder awaitOnline = new LongAdder();
     public final LongAdder awaitTimedOut = new LongAdder();
