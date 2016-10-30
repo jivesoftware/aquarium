@@ -137,7 +137,7 @@ public class ReadWaterline<T> {
 
         stateStorage.update(setState -> {
             @SuppressWarnings("unchecked")
-            StateEntry<T>[] otherE = (StateEntry<T>[]) new StateEntry[1];
+            StateEntry<T>[] otherE = new StateEntry[1];
             boolean[] coldstart = {true};
 
             //byte[] fromKey = stateKey(versionedPartitionName.getPartitionName(), context, versionedPartitionName.getPartitionVersion(), null, null);
