@@ -6,7 +6,7 @@ import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
 import com.jivesoftware.os.aquarium.interfaces.AwaitLivelyEndState;
 import com.jivesoftware.os.aquarium.interfaces.CurrentTimeMillis;
-import com.jivesoftware.os.aquarium.interfaces.IsCurrentMember;
+import com.jivesoftware.os.aquarium.interfaces.CurrentMembers;
 import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage;
 import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
 import com.jivesoftware.os.aquarium.interfaces.StateStorage;
@@ -49,15 +49,16 @@ public class AquariumNGTest {
 
         AtomicInteger rawRingSize = new AtomicInteger();
         AtQuorum atQuorum = count -> count > rawRingSize.get() / 2;
-        IsCurrentMember isCurrentMember = member1 -> true;
+
 
         Map<Member, Integer> rawLifecycles = Maps.newConcurrentMap();
+        CurrentMembers currentMembers = rawLifecycles::keySet;
 
         int aquariumNodeCount = 1;
         AquariumNode[] nodes = new AquariumNode[aquariumNodeCount];
         int deadAfterMillis = 10_000;
         for (int i = 0; i < aquariumNodeCount; i++) {
-            createNode(i, rawLifecycles, rawLiveliness, rawState, atQuorum, isCurrentMember, deadAfterMillis, nodes);
+            createNode(i, rawLifecycles, rawLiveliness, rawState, atQuorum, currentMembers, deadAfterMillis, nodes);
         }
 
         ScheduledExecutorService service = Executors.newScheduledThreadPool(aquariumNodeCount);
@@ -224,7 +225,7 @@ public class AquariumNGTest {
     }
 
     private void createNode(int i, Map<Member, Integer> rawLifecycles, NavigableMap<Key, TimestampedState<Void>> rawLiveliness,
-        NavigableMap<Key, TimestampedState<State>> rawState, AtQuorum atQuorum, IsCurrentMember isCurrentMember, int deadAfterMillis, AquariumNode[] nodes) {
+        NavigableMap<Key, TimestampedState<State>> rawState, AtQuorum atQuorum, CurrentMembers currentMembers, int deadAfterMillis, AquariumNode[] nodes) {
         OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(i));
 
         Member member = new Member(intBytes(i));
@@ -303,7 +304,7 @@ public class AquariumNGTest {
             liveliness,
             memberLifecycle,
             atQuorum,
-            isCurrentMember,
+            currentMembers,
             ifYoureLuckyCurrentTransitionQuorum,
             ifYoureLuckyDesiredTransitionQuorum,
             clockDrift);
@@ -317,15 +318,16 @@ public class AquariumNGTest {
 
         AtomicInteger rawRingSize = new AtomicInteger();
         AtQuorum atQuorum = count -> count > rawRingSize.get() / 2;
-        IsCurrentMember isCurrentMember = member1 -> true;
+
 
         Map<Member, Integer> rawLifecycles = Maps.newConcurrentMap();
+        CurrentMembers currentMembers = rawLifecycles::keySet;
 
         int aquariumNodeCount = 10;
         AquariumNode[] nodes = new AquariumNode[aquariumNodeCount];
         int deadAfterMillis = 10_000;
         for (int i = 0; i < aquariumNodeCount; i++) {
-            createNode(i, rawLifecycles, rawLiveliness, rawState, atQuorum, isCurrentMember, deadAfterMillis, nodes);
+            createNode(i, rawLifecycles, rawLiveliness, rawState, atQuorum, currentMembers, deadAfterMillis, nodes);
         }
 
         ScheduledExecutorService service = Executors.newScheduledThreadPool(aquariumNodeCount);
@@ -572,7 +574,7 @@ public class AquariumNGTest {
             Liveliness liveliness,
             MemberLifecycle<Integer> memberLifecycle,
             AtQuorum atQuorum,
-            IsCurrentMember isCurrentMember,
+            CurrentMembers currentMembers,
             TransitionQuorum ifYoureLuckyCurrentTransitionQuorum,
             TransitionQuorum ifYoureLuckyDesiredTransitionQuorum,
             AtomicLong clockDrift) {
@@ -595,7 +597,7 @@ public class AquariumNGTest {
                 memberLifecycle,
                 Integer.class,
                 atQuorum,
-                isCurrentMember,
+                currentMembers,
                 member,
                 new AwaitLivelyEndState() {
                     @Override

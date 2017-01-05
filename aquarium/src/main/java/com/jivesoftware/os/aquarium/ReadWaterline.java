@@ -2,7 +2,7 @@ package com.jivesoftware.os.aquarium;
 
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
-import com.jivesoftware.os.aquarium.interfaces.IsCurrentMember;
+import com.jivesoftware.os.aquarium.interfaces.CurrentMembers;
 import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
 import com.jivesoftware.os.aquarium.interfaces.StateStorage;
 import com.jivesoftware.os.aquarium.interfaces.StreamQuorumState;
@@ -21,7 +21,7 @@ public class ReadWaterline<T> {
     private final StateStorage<T> stateStorage;
     private final MemberLifecycle<T> memberLifecycle;
     private final AtQuorum atQuorum;
-    private final IsCurrentMember isCurrentMember;
+    private final CurrentMembers currentMembers;
     private final Class<T> lifecycleType;
 
     public ReadWaterline(LongAdder getMyWaterline,
@@ -30,7 +30,7 @@ public class ReadWaterline<T> {
         StateStorage<T> stateStorage,
         MemberLifecycle<T> memberLifecycle,
         AtQuorum atQuorum,
-        IsCurrentMember isCurrentMember,
+        CurrentMembers currentMembers,
         Class<T> lifecycleType) {
 
         this.getMyWaterline = getMyWaterline;
@@ -39,13 +39,13 @@ public class ReadWaterline<T> {
         this.stateStorage = stateStorage;
         this.memberLifecycle = memberLifecycle;
         this.atQuorum = atQuorum;
-        this.isCurrentMember = isCurrentMember;
+        this.currentMembers = currentMembers;
         this.lifecycleType = lifecycleType;
     }
 
     public Waterline get(Member asMember) throws Exception {
         getMyWaterline.increment();
-        if (!isCurrentMember.isCurrent(asMember)) {
+        if (!currentMembers.getCurrent().contains(asMember)) {
             return null;
         }
 
@@ -87,8 +87,9 @@ public class ReadWaterline<T> {
         @SuppressWarnings("unchecked")
         T[] otherLifecycle = (T[]) Array.newInstance(lifecycleType, 1);
         Set<Member> acked = Sets.newHashSet();
+        Set<Member> current = currentMembers.getCurrent();
         stateStorage.scan(null, null, null, (rootMember, isSelf, ackMember, rootLifecycle, state, timestamp, version) -> {
-            if (!isCurrentMember.isCurrent(rootMember) || !isSelf && !isCurrentMember.isCurrent(ackMember)) {
+            if (!current.contains(rootMember) || !isSelf && !current.contains(ackMember)) {
                 return true;
             }
 
@@ -141,8 +142,9 @@ public class ReadWaterline<T> {
             boolean[] coldstart = {true};
 
             //byte[] fromKey = stateKey(versionedPartitionName.getPartitionName(), context, versionedPartitionName.getPartitionVersion(), null, null);
+            Set<Member> current = currentMembers.getCurrent();
             stateStorage.scan(null, null, null, (rootMember, isSelf, ackMember, lifecycle, state, timestamp, version) -> {
-                if (!isCurrentMember.isCurrent(rootMember) || !isSelf && !isCurrentMember.isCurrent(ackMember)) {
+                if (!current.contains(rootMember) || !isSelf && !current.contains(ackMember)) {
                     return true;
                 }
 
